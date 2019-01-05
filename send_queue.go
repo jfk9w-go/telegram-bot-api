@@ -10,15 +10,22 @@ import (
 
 type sendQueue = pool.Pool
 
-const globalSendQueueDelay = 30 * time.Millisecond
+// GlobalSendQueueDelay is a delay between two consecutive
+// /send* API calls per bot instance.
+var GlobalSendQueueDelay = 30 * time.Millisecond
 
-var sendQueueDelays = map[ChatType]time.Duration{
+// SendQueueDelays are delays between two consecutive
+// /send* API calls per chat grouped by chat types.
+var SendQueueDelays = map[ChatType]time.Duration{
 	PrivateChat: 30 * time.Millisecond,
 	GroupChat:   time.Second,
 	Supergroup:  time.Second,
 	Channel:     0,
 }
 
+// SendQueues represents outgoing message queues.
+// Queues are used to avoid hitting API limits.
+// All /send* API calls go through here.
 type SendQueues struct {
 	client *Client
 	global sendQueue
@@ -44,7 +51,7 @@ func newSendQueues(client *Client) *SendQueues {
 			ptr.resp = resp
 			task.Complete(err)
 
-			time.Sleep(globalSendQueueDelay)
+			time.Sleep(GlobalSendQueueDelay)
 		}),
 		mu: new(sync.RWMutex),
 	}
@@ -69,7 +76,7 @@ func (queues *SendQueues) sub(chatID ChatID) (sendQueue, error) {
 		return nil, err
 	}
 
-	queue := pool.New().Spawn(&sub{queues.global, sendQueueDelays[chat.Type]})
+	queue := pool.New().Spawn(&sub{queues.global, SendQueueDelays[chat.Type]})
 	queues.subs[chat.ID] = queue
 	if chat.Username != "" {
 		queues.subs[chat.Username] = queue
@@ -81,6 +88,13 @@ func (queues *SendQueues) sub(chatID ChatID) (sendQueue, error) {
 	return queue, nil
 }
 
+// Send is an umbrella method for various /send* API calls.
+// Generally entity is either string (/sendMessage, media links in /sendPhoto and others)
+// or flu.ReadResource (when sending a local file in /sendPhoto and others).
+// See
+//   https://core.telegram.org/bots/api#sendmessage
+//   https://core.telegram.org/bots/api#sendphoto
+//   https://core.telegram.org/bots/api#sendvideo
 func (queues *SendQueues) Send(chatID ChatID, entity interface{}, opts SendOpts) (*Message, error) {
 	queue, err := queues.sub(chatID)
 	if err != nil {

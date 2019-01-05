@@ -133,13 +133,13 @@ func defaultResponseProcessor(value interface{}) flu.ReadResponseFunc {
 			return err
 		}
 
-		r := new(Response)
+		r := new(response)
 		err = json.Unmarshal(data, r)
 		if err != nil {
 			return err
 		}
 
-		return r.Parse(value)
+		return r.parse(value)
 	}
 }
 
