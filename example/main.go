@@ -1,17 +1,20 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/jfk9w-go/flu"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 )
 
 // This is an example bot which has three commands:
-//   /greet <name> - reply with "Hello, <name>"
-//   /greet_me - reply with "Hello, <username>"
+//   /greet name - reply with "Hello, name"
+//   /greet_me - reply with "Hello, %username%"
 //   /tick - reply with an image of a tick
+//   /admins - returns current chat admin list
 //   /quit - causes bot instance to shutdown
 //
 // You can launch this example by simply doing:
@@ -45,6 +48,20 @@ func main() {
 			if err != nil {
 				log.Printf("Failed to send tick.png to %d: %s", c.Chat.ID, err)
 			}
+		}).
+		AddFunc("/admins", func(c *telegram.Command) {
+			admins, err := bot.GetChatAdministrators(c.Chat.ID)
+			if err != nil {
+				c.ErrorReply(err)
+				return
+			}
+
+			names := make([]string, len(admins))
+			for i, admin := range admins {
+				names[i] = admin.User.FirstName + " " + admin.User.LastName
+			}
+
+			c.TextReply(fmt.Sprintf("%s administrators: %s", c.Chat.Title, strings.Join(names, ", ")))
 		}).
 		AddFunc("/quit", func(c *telegram.Command) {
 			c.TextReply("Quit. You will have to relaunch the bot manually.")
