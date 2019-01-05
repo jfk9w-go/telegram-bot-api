@@ -6,12 +6,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jfk9w-go/lego/json"
+
 	"github.com/jfk9w-go/flu"
 )
 
-type (
-	ParseMode string
-)
+type ParseMode string
 
 const (
 	None     ParseMode = ""
@@ -47,46 +47,52 @@ func (opts BaseOpts) Set(key, value string) BaseOpts {
 }
 
 type UpdatesOpts struct {
-	Offset         ID
-	Limit          int
-	Timeout        time.Duration
-	AllowedUpdates []string
+	Offset         *ID            `json:"offset"`
+	Limit          *int           `json:"limit"`
+	Timeout        *json.Duration `json:"timeout"`
+	AllowedUpdates []string       `json:"allowed_updates"`
 }
 
-func NewUpdatesOpts() UpdatesOpts {
-	return UpdatesOpts{}
-}
-
-func (opts UpdatesOpts) WithOffset(offset ID) UpdatesOpts {
-	opts.Offset = offset
+func (opts *UpdatesOpts) SetOffset(offset ID) *UpdatesOpts {
+	opts.Offset = &offset
 	return opts
 }
 
-func (opts UpdatesOpts) WithLimit(limit int) UpdatesOpts {
-	opts.Limit = limit
+func (opts *UpdatesOpts) SetLimit(limit int) *UpdatesOpts {
+	opts.Limit = &limit
 	return opts
 }
 
-func (opts UpdatesOpts) WithTimeout(timeout time.Duration) UpdatesOpts {
-	opts.Timeout = timeout
+func (opts *UpdatesOpts) SetTimeout(timeout time.Duration) *UpdatesOpts {
+	opts.Timeout = (*json.Duration)(&timeout)
 	return opts
 }
 
-func (opts UpdatesOpts) WithAllowedUpdates(allowedUpdates ...string) UpdatesOpts {
+func (opts *UpdatesOpts) SetAllowedUpdates(allowedUpdates ...string) *UpdatesOpts {
 	opts.AllowedUpdates = allowedUpdates
 	return opts
 }
 
-func (opts UpdatesOpts) body() flu.RequestBodyBuilder {
-	return flu.Form().
-		Add("offset", opts.Offset.StringValue()).
-		Add("limit", strconv.Itoa(opts.Limit)).
-		Add("timeout", strconv.Itoa(int(opts.Timeout.Seconds()))).
-		AddAll("allowed_updates", opts.AllowedUpdates...)
+func (opts *UpdatesOpts) body() flu.BodyWriter {
+	form := flu.Form()
+	if opts.Offset != nil {
+		form.Add("offset", opts.Offset.StringValue())
+	}
+	if opts.Limit != nil {
+		form.Add("limit", strconv.Itoa(*opts.Limit))
+	}
+	if opts.Timeout != nil {
+		form.Add("timeout", strconv.Itoa(int(opts.Timeout.Value().Seconds())))
+	}
+	if opts.AllowedUpdates != nil {
+		form.AddAll("allowed_updates", opts.AllowedUpdates...)
+	}
+
+	return form
 }
 
 type SendOpts interface {
-	body(ChatID, interface{}) flu.RequestBodyBuilder
+	body(ChatID, interface{}) flu.BodyWriter
 	entityType() string
 }
 
@@ -113,8 +119,8 @@ func (opts BaseSendOpts) DisableNotification(disableNotification bool) BaseSendO
 	return opts
 }
 
-func (opts BaseSendOpts) ReplyToMessageId(replyToMessageId ID) BaseSendOpts {
-	opts.base().Add("reply_to_message_id", replyToMessageId.StringValue())
+func (opts BaseSendOpts) ReplyToMessageId(replyToMessageID ID) BaseSendOpts {
+	opts.base().Add("reply_to_message_id", replyToMessageID.StringValue())
 	return opts
 }
 
@@ -140,10 +146,10 @@ func (opts MessageOpts) DisableWebPagePreview(disableWebPagePreview bool) Messag
 	return opts
 }
 
-func (opts MessageOpts) body(chatId ChatID, entity interface{}) flu.RequestBodyBuilder {
+func (opts MessageOpts) body(chatID ChatID, entity interface{}) flu.BodyWriter {
 	return flu.FormWith(opts.base().base().values()).
 		Add("text", entity.(string)).
-		Add("chat_id", chatId.StringValue())
+		Add("chat_id", chatID.StringValue())
 }
 
 func (opts MessageOpts) entityType() string {
@@ -172,8 +178,8 @@ func (opts MediaOpts) Video() VideoOpts {
 	return VideoOpts(opts)
 }
 
-func (opts MediaOpts) body(chatId ChatID, entityType string, entity interface{}) flu.RequestBodyBuilder {
-	opts.send().base().Add("chat_id", chatId.StringValue())
+func (opts MediaOpts) body(chatID ChatID, entityType string, entity interface{}) flu.BodyWriter {
+	opts.send().base().Add("chat_id", chatID.StringValue())
 	switch entity := entity.(type) {
 	case string:
 		return flu.FormWith(opts.send().base().values()).
@@ -194,7 +200,7 @@ func (opts DocumentOpts) media() MediaOpts {
 	return MediaOpts(opts)
 }
 
-func (opts DocumentOpts) body(chatId ChatID, entity interface{}) flu.RequestBodyBuilder {
+func (opts DocumentOpts) body(chatId ChatID, entity interface{}) flu.BodyWriter {
 	return opts.media().body(chatId, "document", entity)
 }
 
@@ -208,8 +214,8 @@ func (opts PhotoOpts) media() MediaOpts {
 	return MediaOpts(opts)
 }
 
-func (opts PhotoOpts) body(chatId ChatID, entity interface{}) flu.RequestBodyBuilder {
-	return opts.media().body(chatId, "photo", entity)
+func (opts PhotoOpts) body(chatID ChatID, entity interface{}) flu.BodyWriter {
+	return opts.media().body(chatID, "photo", entity)
 }
 
 func (opts PhotoOpts) entityType() string {
@@ -237,8 +243,8 @@ func (opts VideoOpts) Width(width int) VideoOpts {
 	return opts
 }
 
-func (opts VideoOpts) body(chatId ChatID, entity interface{}) flu.RequestBodyBuilder {
-	return opts.media().body(chatId, "video", entity)
+func (opts VideoOpts) body(chatID ChatID, entity interface{}) flu.BodyWriter {
+	return opts.media().body(chatID, "video", entity)
 }
 
 func (opts VideoOpts) entityType() string {

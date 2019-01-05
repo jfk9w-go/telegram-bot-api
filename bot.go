@@ -2,58 +2,57 @@ package telegram
 
 import (
 	"log"
-	"sync"
 	"time"
 
 	"github.com/jfk9w-go/flu"
 )
 
 type Bot struct {
-	BotApi
-	sendQueues  *sendQueues
-	updates     chan Update
-	updatesOnce sync.Once
+	*Client
+	*SendQueues
 }
 
-func NewBot(client *flu.Client, token string) *Bot {
-	var api = NewBotApi(client, token)
+func NewBot(http *flu.Client, token string) *Bot {
+	if token == "" {
+		panic("token must not be empty")
+	}
+
+	client := newClient(http, token)
 	return &Bot{
-		BotApi:     api,
-		sendQueues: newSendQueues(api),
+		Client:     client,
+		SendQueues: newSendQueues(client),
 	}
 }
 
-func (bot *Bot) Send(chatId ChatID, entity interface{}, opts SendOpts) (*Message, error) {
-	return bot.sendQueues.send(chatId, entity, opts)
+func (b *Bot) Listen(listener UpdateListener) {
+	listener.SetBot(b)
+	updateCh := make(chan Update)
+	go b.runUpdatesChan(updateCh, new(UpdatesOpts).
+		SetTimeout(time.Minute).
+		SetAllowedUpdates(listener.AllowedUpdates()...))
+	for update := range updateCh {
+		go listener.OnUpdate(update)
+	}
 }
 
-func (bot *Bot) GetUpdatesChan(opts UpdatesOpts) <-chan Update {
-	bot.updatesOnce.Do(func() {
-		bot.updates = make(chan Update)
-		go bot.runUpdatesChan(opts)
-	})
-
-	return bot.updates
-}
-
-func (bot *Bot) runUpdatesChan(opts UpdatesOpts) {
+func (b *Bot) runUpdatesChan(updateCh chan<- Update, opts *UpdatesOpts) {
 	for {
-		var batch, err = bot.GetUpdates(opts)
+		batch, err := b.GetUpdates(opts)
 		if err == nil {
 			if len(batch) > 0 {
 				log.Printf("Received %d updates", len(batch))
 			}
 
 			for _, update := range batch {
-				bot.updates <- update
-				opts = opts.WithOffset(ID(update.ID.Int64Value() + 1))
+				updateCh <- update
+				opts.SetOffset(update.ID.Increment())
 			}
 
 			continue
 		}
 
 		if err != nil {
-			log.Printf("An error occured while receiving updates: %v", err)
+			log.Printf("An error occured while polling: %v", err)
 			time.Sleep(time.Minute)
 		}
 	}

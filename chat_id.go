@@ -4,9 +4,6 @@ import (
 	"errors"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/jfk9w-go/flu"
 )
 
 type ID int64
@@ -33,6 +30,10 @@ func (id ID) StringValue() string {
 	return strconv.FormatInt(int64(id), 10)
 }
 
+func (id ID) Increment() ID {
+	return ID(id.Int64Value() + 1)
+}
+
 type Username string
 
 func ParseUsername(str string) (Username, error) {
@@ -49,25 +50,4 @@ func (username Username) StringValue() string {
 
 type ChatID interface {
 	StringValue() string
-}
-
-type BotApi interface {
-	GetMe() (*User, error)
-	GetChat(ChatID) (*Chat, error)
-	GetChatAdministrators(ChatID) ([]ChatMember, error)
-	GetChatMember(ChatID, ID) (*ChatMember, error)
-	GetUpdates(UpdatesOpts) ([]Update, error)
-	Send(ChatID, interface{}, SendOpts) (*Message, error)
-}
-
-func NewBotApi(client *flu.Client, token string) BotApi {
-	if client == nil {
-		client = flu.NewClient(nil).
-			ResponseHeaderTimeout(80 * time.Second)
-	}
-
-	return &BotApiImpl{
-		client:  client,
-		baseUri: "https://api.telegram.org/bot" + token,
-	}
 }
