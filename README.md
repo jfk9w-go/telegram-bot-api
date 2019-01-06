@@ -10,7 +10,7 @@ Not all API methods, options and types are implemented at the moment.
 
 ## Features
 * Simple and concise Telegram Bot API client interface.
-* Flood control aware build-in API call throttler.
+* Flood control aware built-in API call throttler.
 * Update and command listener support.
 
 ## Installation
