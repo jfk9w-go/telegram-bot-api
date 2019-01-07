@@ -36,9 +36,10 @@ func newClient(http *flu.Client, token string) *Client {
 func (c *Client) GetUpdates(opts *UpdatesOpts) ([]Update, error) {
 	updates := make([]Update, 0)
 	return updates, c.http.NewRequest().
+		Post().
 		Endpoint(c.endpoint("/getUpdates")).
 		Body(opts.body()).
-		Post().
+		Execute().
 		ReadResponseFunc(defaultResponseProcessor(&updates)).
 		Error
 }
@@ -49,8 +50,9 @@ func (c *Client) GetUpdates(opts *UpdatesOpts) ([]Update, error) {
 func (c *Client) GetMe() (*User, error) {
 	user := new(User)
 	return user, c.http.NewRequest().
-		Endpoint(c.endpoint("/getMe")).
 		Get().
+		Endpoint(c.endpoint("/getMe")).
+		Execute().
 		ReadResponseFunc(defaultResponseProcessor(user)).
 		Error
 }
@@ -67,9 +69,10 @@ func (c *Client) GetMe() (*User, error) {
 func (c *Client) send(chatID ChatID, entity interface{}, opts SendOpts) (*Message, error) {
 	message := new(Message)
 	return message, c.http.NewRequest().
+		Post().
 		Endpoint(c.endpoint("/send" + opts.entityType())).
 		Body(opts.body(chatID, entity)).
-		Post().
+		Execute().
 		ReadResponseFunc(defaultResponseProcessor(message)).
 		Error
 }
@@ -81,9 +84,10 @@ func (c *Client) send(chatID ChatID, entity interface{}, opts SendOpts) (*Messag
 func (c *Client) GetChat(chatID ChatID) (*Chat, error) {
 	chat := new(Chat)
 	return chat, c.http.NewRequest().
+		Get().
 		Endpoint(c.endpoint("/getChat")).
 		QueryParam("chat_id", chatID.StringValue()).
-		Get().
+		Execute().
 		ReadResponseFunc(defaultResponseProcessor(chat)).
 		Error
 }
@@ -96,9 +100,10 @@ func (c *Client) GetChat(chatID ChatID) (*Chat, error) {
 func (c *Client) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 	members := make([]ChatMember, 0)
 	return members, c.http.NewRequest().
+		Get().
 		Endpoint(c.endpoint("/getChatAdministrators")).
 		QueryParam("chat_id", chatID.StringValue()).
-		Get().
+		Execute().
 		ReadResponseFunc(defaultResponseProcessor(&members)).
 		Error
 }
@@ -109,10 +114,11 @@ func (c *Client) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 func (c *Client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 	member := new(ChatMember)
 	return member, c.http.NewRequest().
+		Get().
 		Endpoint(c.endpoint("/getChatMember")).
 		QueryParam("chat_id", chatID.StringValue()).
 		QueryParam("user_id", userID.StringValue()).
-		Get().
+		Execute().
 		ReadResponseFunc(defaultResponseProcessor(member)).
 		Error
 }
