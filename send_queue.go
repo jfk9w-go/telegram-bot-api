@@ -83,7 +83,7 @@ func (queues *SendQueues) sub(chatID ChatID) (sendQueue, error) {
 	}
 
 	queues.mu.Unlock()
-	log.Printf("Created new send queue for %s", chatID.StringValue())
+	log.Println("Created new send queue for", chatID)
 
 	return queue, nil
 }

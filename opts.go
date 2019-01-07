@@ -192,7 +192,7 @@ func (opts MessageOpts) DisableWebPagePreview(disableWebPagePreview bool) Messag
 func (opts MessageOpts) body(chatID ChatID, entity interface{}) flu.BodyWriter {
 	return flu.FormWith(opts.base().base().values()).
 		Add("text", entity.(string)).
-		Add("chat_id", chatID.StringValue())
+		Add("chat_id", chatID.queryParam())
 }
 
 func (opts MessageOpts) entityType() string {
@@ -232,7 +232,7 @@ func (opts MediaOpts) Video() VideoOpts {
 }
 
 func (opts MediaOpts) body(chatID ChatID, entityType string, entity interface{}) flu.BodyWriter {
-	opts.send().base().Add("chat_id", chatID.StringValue())
+	opts.send().base().Add("chat_id", chatID.queryParam())
 	switch entity := entity.(type) {
 	case string:
 		return flu.FormWith(opts.send().base().values()).

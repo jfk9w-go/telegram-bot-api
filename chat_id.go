@@ -25,19 +25,17 @@ func MustParseID(value string) ID {
 	return id
 }
 
-// Int64Value returns the ID value as int64.
-func (id ID) Int64Value() int64 {
-	return int64(id)
-}
-
-// StringValue returns the ID value as string.
-func (id ID) StringValue() string {
-	return strconv.FormatInt(int64(id), 10)
+func (id ID) queryParam() string {
+	return id.String()
 }
 
 // Increment increments the new ID value equal to the old one incremented by one.
 func (id ID) Increment() ID {
-	return ID(id.Int64Value() + 1)
+	return ID(int64(id) + 1)
+}
+
+func (id ID) String() string {
+	return strconv.FormatInt(int64(id), 10)
 }
 
 // Username represents a Telegram username (@userxxx...).
@@ -52,12 +50,15 @@ func ParseUsername(str string) (Username, error) {
 	return "", errors.New("username must begin with a '@'")
 }
 
-// StringValue returns original string value.
-func (username Username) StringValue() string {
+func (username Username) queryParam() string {
+	return username.String()
+}
+
+func (username Username) String() string {
 	return string(username)
 }
 
 // ChatID is either an ID or channel Username in various API calls.
 type ChatID interface {
-	StringValue() string
+	queryParam() string
 }

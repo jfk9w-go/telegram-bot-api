@@ -86,7 +86,7 @@ func (c *Client) GetChat(chatID ChatID) (*Chat, error) {
 	return chat, c.http.NewRequest().
 		Get().
 		Endpoint(c.endpoint("/getChat")).
-		QueryParam("chat_id", chatID.StringValue()).
+		QueryParam("chat_id", chatID.queryParam()).
 		Execute().
 		ReadResponseFunc(defaultResponseProcessor(chat)).
 		Error
@@ -102,7 +102,7 @@ func (c *Client) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 	return members, c.http.NewRequest().
 		Get().
 		Endpoint(c.endpoint("/getChatAdministrators")).
-		QueryParam("chat_id", chatID.StringValue()).
+		QueryParam("chat_id", chatID.queryParam()).
 		Execute().
 		ReadResponseFunc(defaultResponseProcessor(&members)).
 		Error
@@ -116,7 +116,7 @@ func (c *Client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 	return member, c.http.NewRequest().
 		Get().
 		Endpoint(c.endpoint("/getChatMember")).
-		QueryParam("chat_id", chatID.StringValue()).
+		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("user_id", userID.StringValue()).
 		Execute().
 		ReadResponseFunc(defaultResponseProcessor(member)).
