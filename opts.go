@@ -103,7 +103,7 @@ func (opts *UpdatesOpts) SetAllowedUpdates(allowedUpdates ...string) *UpdatesOpt
 func (opts *UpdatesOpts) body() flu.BodyWriter {
 	form := flu.Form()
 	if opts.Offset != nil {
-		form.Add("offset", opts.Offset.StringValue())
+		form.Add("offset", opts.Offset.queryParam())
 	}
 	if opts.Limit != nil {
 		form.Add("limit", strconv.Itoa(*opts.Limit))
@@ -157,7 +157,7 @@ func (opts BaseSendOpts) DisableNotification(disableNotification bool) BaseSendO
 // ReplyToMessageID sets the reply_to_message_id request parameter and returns itself.
 // If the message is a reply, ID of the original message
 func (opts BaseSendOpts) ReplyToMessageID(replyToMessageID ID) BaseSendOpts {
-	opts.base().Add("reply_to_message_id", replyToMessageID.StringValue())
+	opts.base().Add("reply_to_message_id", replyToMessageID.queryParam())
 	return opts
 }
 
