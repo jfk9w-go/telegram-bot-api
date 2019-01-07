@@ -117,7 +117,7 @@ func (c *Client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 		Get().
 		Endpoint(c.endpoint("/getChatMember")).
 		QueryParam("chat_id", chatID.queryParam()).
-		QueryParam("user_id", userID.StringValue()).
+		QueryParam("user_id", userID.queryParam()).
 		Execute().
 		ReadResponseFunc(defaultResponseProcessor(member)).
 		Error
