@@ -77,6 +77,27 @@ func (c *Client) send(chatID ChatID, entity interface{}, opts SendOpts) (*Messag
 		Error
 }
 
+// Use this method to delete a message, including service messages, with the following limitations:
+//- A message can only be deleted if it was sent less than 48 hours ago.
+//- Bots can delete outgoing messages in private chats, groups, and supergroups.
+//- Bots granted can_post_messages permissions can delete outgoing messages in channels.
+//- If the bot is an administrator of a group, it can delete any message there.
+//- If the bot has can_delete_messages permission in a supergroup or a channel, it can delete any message there.
+// Returns True on success.
+// See
+//    https://core.telegram.org/bots/api#deletemessage
+func (c *Client) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
+	var r bool
+	return r, c.http.NewRequest().
+		Get().
+		Endpoint(c.endpoint("/deleteMessage")).
+		QueryParam("chat_id", chatID.queryParam()).
+		QueryParam("message_id", messageID.queryParam()).
+		Execute().
+		ReadResponseFunc(defaultResponseProcessor(&r)).
+		Error
+}
+
 // Use this method to get up to date information about the chat (current name of
 // the user for one-on-one conversations, current username of a user, group or channel, etc.).
 // Returns a Chat object on success.
