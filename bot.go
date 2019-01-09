@@ -11,7 +11,7 @@ import (
 
 type stream = pool.Pool
 
-// UpstreamSendDelay is a delay between two consecutive /send* API calls per bot instance.
+// UpstreamSendDelay is a delay between two consecutive /send* API calls per bot token.
 var UpstreamSendDelay = 30 * time.Millisecond
 
 // SendDelays are delays between two consecutive /send* API calls per chat with a given type.

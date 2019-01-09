@@ -1,21 +1,21 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jfk9w-go/flu"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 )
 
 // This is an example bot which has three commands:
-//   /greet name - reply with "Hello, name"
-//   /greet_me - reply with "Hello, %username%"
-//   /tick - reply with an image of a tick
-//   /admins - returns current chat admin list
+//   /greet - reply with "Hello, %username%"
+//   /count n - count from 1 till n
+//   /tick - tick
+//   /secret text s - send a text and erase the message in s seconds
 //
 // You can launch this example by simply doing:
 //   cd example/ && go run main.go <token>
@@ -29,13 +29,6 @@ func main() {
 	// Can be launched in a separate goroutine.
 	bot.Listen(telegram.NewCommandUpdateListener().
 		AddFunc("/greet", func(c *telegram.Command) {
-			if c.Payload == "" {
-				c.TextReply("Please enter a name.")
-			} else {
-				c.TextReply("Hello, " + c.Payload)
-			}
-		}).
-		AddFunc("/greet_me", func(c *telegram.Command) {
 			c.TextReply("Hello, " + c.User.FirstName)
 		}).
 		AddFunc("/tick", func(c *telegram.Command) {
@@ -48,20 +41,6 @@ func main() {
 			if err != nil {
 				log.Printf("Failed to send tick.png to %d: %s", c.Chat.ID, err)
 			}
-		}).
-		AddFunc("/admins", func(c *telegram.Command) {
-			admins, err := bot.GetChatAdministrators(c.Chat.ID)
-			if err != nil {
-				c.ErrorReply(err)
-				return
-			}
-
-			names := make([]string, len(admins))
-			for i, admin := range admins {
-				names[i] = admin.User.FirstName + " " + admin.User.LastName
-			}
-
-			c.TextReply(fmt.Sprintf("%s administrators: %s", c.Chat.Title, strings.Join(names, ", ")))
 		}).
 		AddFunc("/count", func(c *telegram.Command) {
 			limit, err := strconv.Atoi(c.Payload)
@@ -78,7 +57,35 @@ func main() {
 			for i := 1; i <= limit; i++ {
 				c.TextReply(strconv.Itoa(i))
 			}
-		}))
+		}).
+		AddFunc("/secret", func(c *telegram.Command) {
+			fields := strings.Fields(c.Payload)
+			if len(fields) != 2 {
+				c.TextReply("usage: /secret Hi 5")
+				return
+			}
 
-	log.Printf("Application exit")
+			timeoutSecs, err := strconv.Atoi(fields[1])
+			if err != nil {
+				c.ErrorReply(err)
+				return
+			}
+
+			timeout := time.Duration(timeoutSecs) * time.Second
+			m, err := bot.Send(c.Chat.ID, fields[0], telegram.NewSendOpts().Message())
+			if err != nil {
+				c.ErrorReply(err)
+				return
+			}
+
+			time.AfterFunc(timeout, func() {
+				ok, err := bot.DeleteMessage(m.Chat.ID, m.ID)
+				if err != nil {
+					c.ErrorReply(err)
+					return
+				}
+
+				log.Println("Message deleted:", ok)
+			})
+		}))
 }
