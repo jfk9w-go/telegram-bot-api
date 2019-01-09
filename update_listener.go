@@ -103,7 +103,7 @@ type Command struct {
 }
 
 func (c *Command) reply(text string) {
-	_, err := c.b.send(c.Chat.ID, text, NewSendOpts().
+	_, err := c.b.Send(c.Chat.ID, text, NewSendOpts().
 		DisableNotification(true).
 		ReplyToMessageID(c.MessageID).
 		Message().

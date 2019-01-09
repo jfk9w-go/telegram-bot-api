@@ -22,13 +22,13 @@ type (
 
 	// See https://core.telegram.org/bots/api#chat
 	Chat struct {
-		ID                          ID       `json:"id"`
-		Type                        ChatType `json:"type"`
-		Title                       string   `json:"title"`
-		Username                    Username `json:"username"`
-		FirstName                   string   `json:"first_name"`
-		LastName                    string   `json:"last_name"`
-		AllMembersAreAdministrators bool     `json:"all_members_are_administrators"`
+		ID                          ID        `json:"id"`
+		Type                        ChatType  `json:"type"`
+		Title                       string    `json:"title"`
+		Username                    *Username `json:"username"`
+		FirstName                   string    `json:"first_name"`
+		LastName                    string    `json:"last_name"`
+		AllMembersAreAdministrators bool      `json:"all_members_are_administrators"`
 	}
 
 	// See https://core.telegram.org/bots/api#message

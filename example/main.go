@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/jfk9w-go/flu"
@@ -15,7 +16,6 @@ import (
 //   /greet_me - reply with "Hello, %username%"
 //   /tick - reply with an image of a tick
 //   /admins - returns current chat admin list
-//   /quit - causes bot instance to shutdown
 //
 // You can launch this example by simply doing:
 //   cd example/ && go run main.go <token>
@@ -63,9 +63,21 @@ func main() {
 
 			c.TextReply(fmt.Sprintf("%s administrators: %s", c.Chat.Title, strings.Join(names, ", ")))
 		}).
-		AddFunc("/quit", func(c *telegram.Command) {
-			c.TextReply("Quit. You will have to relaunch the bot manually.")
-			bot.Close()
+		AddFunc("/count", func(c *telegram.Command) {
+			limit, err := strconv.Atoi(c.Payload)
+			if err != nil {
+				c.ErrorReply(err)
+				return
+			}
+
+			if limit <= 0 {
+				c.TextReply("limit must be positive")
+				return
+			}
+
+			for i := 1; i <= limit; i++ {
+				c.TextReply(strconv.Itoa(i))
+			}
 		}))
 
 	log.Printf("Application exit")
