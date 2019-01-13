@@ -1,9 +1,7 @@
 package telegram
 
 import (
-	"errors"
 	"strconv"
-	"strings"
 )
 
 // ID is an entity identifier (chat, message, user, etc.)
@@ -38,20 +36,11 @@ func (id ID) String() string {
 	return strconv.FormatInt(int64(id), 10)
 }
 
-// Username represents a Telegram username (@userxxx...).
+// Username represents a Telegram username.
 type Username string
 
-// ParseUsername checks if a string value conforms to the username format.
-func ParseUsername(str string) (Username, error) {
-	if strings.HasPrefix(str, "@") {
-		return Username(str), nil
-	}
-
-	return "", errors.New("username must begin with a '@'")
-}
-
 func (username Username) queryParam() string {
-	return username.String()
+	return "@" + username.String()
 }
 
 func (username Username) String() string {
