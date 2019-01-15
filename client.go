@@ -144,6 +144,21 @@ func (c *Client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 		Error
 }
 
+// Use this method to send answers to callback queries sent from inline keyboards.
+// The answer will be displayed to the user as a notification at the top of the chat screen or as an alert.
+// On success, True is returned.
+// https://core.telegram.org/bots/api#answercallbackquery
+func (c *Client) AnswerCallbackQuery(id string, opts AnswerCallbackQueryOpts) (bool, error) {
+	var r bool
+	return r, c.http.NewRequest().
+		Post().
+		Endpoint(c.endpoint("/answerCallbackQuery")).
+		Body(opts.body().Add("callback_query_id", id)).
+		Execute().
+		ReadResponseFunc(defaultResponseProcessor(&r)).
+		Error
+}
+
 func (c *Client) endpoint(method string) string {
 	return c.baseURI + method
 }

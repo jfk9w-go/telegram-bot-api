@@ -27,7 +27,7 @@ func main() {
 	bot := telegram.NewBot(nil, token)
 	// Listen to the commands. Blocks until Bot.Close() is called.
 	// Can be launched in a separate goroutine.
-	bot.Listen(telegram.NewCommandUpdateListener().
+	bot.Listen(telegram.NewCommandUpdateListener(bot).
 		AddFunc("/greet", func(c *telegram.Command) {
 			c.TextReply("Hello, " + c.User.FirstName)
 		}).
@@ -87,5 +87,21 @@ func main() {
 
 				log.Println("Message deleted:", ok)
 			})
+		}).
+		AddFunc("/say", func(c *telegram.Command) {
+			if c.Payload == "" {
+				c.TextReply("please specify a message")
+				return
+			}
+
+			_, err := bot.Send(c.Chat.ID, "Here you go.", telegram.NewSendOpts().
+				Message().
+				ReplyMarkup(telegram.CommandButton("Say "+c.Payload, "say", c.Payload)))
+			if err != nil {
+				log.Println("Failed to send button", err)
+			}
+		}).
+		AddFunc("say", func(c *telegram.Command) {
+			c.TextReply(c.Payload)
 		}))
 }

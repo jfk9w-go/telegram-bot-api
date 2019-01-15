@@ -1,12 +1,11 @@
 package telegram
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
 	"time"
-
-	"github.com/jfk9w-go/lego/json"
 
 	"github.com/jfk9w-go/flu"
 )
@@ -71,7 +70,7 @@ type UpdatesOpts struct {
 	// Values between 1—100 are accepted. Defaults to 100.
 	Limit *int
 	// Timeout for long polling.
-	Timeout *json.Duration
+	Timeout *time.Duration
 	// List the types of updates you want your bot to receive.
 	AllowedUpdates []string
 }
@@ -90,7 +89,7 @@ func (opts *UpdatesOpts) SetLimit(limit int) *UpdatesOpts {
 
 // SetTimeout sets the timeout and returns itself.
 func (opts *UpdatesOpts) SetTimeout(timeout time.Duration) *UpdatesOpts {
-	opts.Timeout = (*json.Duration)(&timeout)
+	opts.Timeout = &timeout
 	return opts
 }
 
@@ -109,7 +108,7 @@ func (opts *UpdatesOpts) body() flu.BodyWriter {
 		form.Add("limit", strconv.Itoa(*opts.Limit))
 	}
 	if opts.Timeout != nil {
-		form.Add("timeout", strconv.Itoa(int(opts.Timeout.Value().Seconds())))
+		form.Add("timeout", strconv.Itoa(int(opts.Timeout.Seconds())))
 	}
 	if opts.AllowedUpdates != nil {
 		form.AddAll("allowed_updates", opts.AllowedUpdates...)
@@ -186,6 +185,14 @@ func (opts MessageOpts) DisableWebPagePreview(disableWebPagePreview bool) Messag
 		opts.base().base().Add("disable_web_page_preview", "true")
 	}
 
+	return opts
+}
+
+// Additional interface options. A JSON-serialized object for an inline keyboard, custom reply keyboard,
+// instructions to remove reply keyboard or to force a reply from the user.
+func (opts MessageOpts) ReplyMarkup(markup ReplyMarkup) MessageOpts {
+	markupData, _ := json.Marshal(markup)
+	opts.base().base().Set("reply_markup", string(markupData))
 	return opts
 }
 
@@ -314,4 +321,50 @@ func (opts VideoOpts) body(chatID ChatID, entity interface{}) flu.BodyWriter {
 
 func (opts VideoOpts) entityType() string {
 	return "Video"
+}
+
+type AnswerCallbackQueryOpts BaseOpts
+
+func NewAnswerCallbackQueryOpts() AnswerCallbackQueryOpts {
+	return AnswerCallbackQueryOpts{}
+}
+
+func (opts AnswerCallbackQueryOpts) base() BaseOpts {
+	return BaseOpts(opts)
+}
+
+func (opts AnswerCallbackQueryOpts) Text(text string) AnswerCallbackQueryOpts {
+	if text != "" {
+		opts.base().Set("text", text)
+	}
+
+	return opts
+}
+
+func (opts AnswerCallbackQueryOpts) ShowAlert(showAlert bool) AnswerCallbackQueryOpts {
+	if showAlert {
+		opts.base().Set("show_alert", "true")
+	}
+
+	return opts
+}
+
+func (opts AnswerCallbackQueryOpts) URL(url string) AnswerCallbackQueryOpts {
+	if url != "" {
+		opts.base().Set("url", url)
+	}
+
+	return opts
+}
+
+func (opts AnswerCallbackQueryOpts) CacheTime(cacheTime time.Duration) AnswerCallbackQueryOpts {
+	if cacheTime.Seconds() > 0 {
+		opts.base().Set("cache_time", fmt.Sprintf("%.0f", cacheTime.Seconds()))
+	}
+
+	return opts
+}
+
+func (opts AnswerCallbackQueryOpts) body() flu.FormBody {
+	return flu.FormWith(opts.base().values())
 }

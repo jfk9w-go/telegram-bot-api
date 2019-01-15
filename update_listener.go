@@ -13,8 +13,6 @@ type UpdateListener interface {
 	// AllowedUpdates is the allowed_updates parameter passed
 	// in API calls to /getUpdates or /setWebhook.
 	AllowedUpdates() []string
-	// SetBot is an internal method used for injecting Bot instance.
-	SetBot(b *Bot)
 }
 
 // CommandUpdateListener is an UpdateListener handling incoming bot commands
@@ -25,8 +23,8 @@ type CommandUpdateListener struct {
 }
 
 // NewCommandUpdateListener creates a new instance of CommandUpdateListener.
-func NewCommandUpdateListener() *CommandUpdateListener {
-	return &CommandUpdateListener{nil, make(map[string]CommandListener)}
+func NewCommandUpdateListener(bot *Bot) *CommandUpdateListener {
+	return &CommandUpdateListener{bot, make(map[string]CommandListener)}
 }
 
 // Add binds a CommandListener to a command.
@@ -61,21 +59,20 @@ func (cul *CommandUpdateListener) AllowedUpdates() []string {
 	return []string{"message", "edited_message"}
 }
 
-func (cul *CommandUpdateListener) SetBot(b *Bot) {
-	cul.b = b
-}
-
 func extractCommand(update Update) *Command {
-	var message *Message
 	switch {
 	case update.Message != nil:
-		message = update.Message
+		return extractCommandMessage(update.Message)
 	case update.EditedMessage != nil:
-		message = update.EditedMessage
-	default:
-		return nil
+		return extractCommandMessage(update.EditedMessage)
+	case update.CallbackQuery != nil:
+		return extractCommandCallbackQuery(update.CallbackQuery)
 	}
 
+	return nil
+}
+
+func extractCommandMessage(message *Message) *Command {
 	for _, entity := range message.Entities {
 		if entity.Type == "bot_command" {
 			return &Command{
@@ -91,6 +88,40 @@ func extractCommand(update Update) *Command {
 	return nil
 }
 
+func extractCommandCallbackQuery(callbackQuery *CallbackQuery) *Command {
+	if callbackQuery.Data == nil {
+		return nil
+	}
+
+	for i, c := range *callbackQuery.Data {
+		if c == ':' && len(*callbackQuery.Data) > i+1 {
+			return &Command{
+				Chat:            &callbackQuery.Message.Chat,
+				User:            &callbackQuery.From,
+				MessageID:       callbackQuery.Message.ID,
+				Key:             (*callbackQuery.Data)[:i],
+				Payload:         (*callbackQuery.Data)[i+1:],
+				callbackQueryID: &callbackQuery.ID,
+			}
+		}
+	}
+
+	return nil
+}
+
+func CommandButton(text, key, data string) ReplyMarkup {
+	return &InlineKeyboardMarkup{
+		InlineKeyboard: [][]InlineKeyboardButton{
+			{
+				{
+					Text:         text,
+					CallbackData: key + ":" + data,
+				},
+			},
+		},
+	}
+}
+
 // Command is a text bot command.
 type Command struct {
 	Chat      *Chat
@@ -99,15 +130,23 @@ type Command struct {
 	Key       string
 	Payload   string
 
+	callbackQueryID *string
+
 	b *Bot
 }
 
 func (c *Command) reply(text string) {
-	_, err := c.b.Send(c.Chat.ID, text, NewSendOpts().
-		DisableNotification(true).
-		ReplyToMessageID(c.MessageID).
-		Message().
-		DisableWebPagePreview(true))
+	var err error
+	if c.callbackQueryID != nil {
+		_, err = c.b.AnswerCallbackQuery(*c.callbackQueryID, NewAnswerCallbackQueryOpts().
+			Text(text))
+	} else if text != "" {
+		_, err = c.b.Send(c.Chat.ID, text, NewSendOpts().
+			DisableNotification(true).
+			ReplyToMessageID(c.MessageID).
+			Message().
+			DisableWebPagePreview(true))
+	}
 
 	if err != nil {
 		log.Printf("Failed to send reply (%s) to chat %v, message %v: %s\n",

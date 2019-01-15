@@ -117,7 +117,6 @@ func (b *Bot) Send(chatID ChatID, entity interface{}, opts SendOpts) (*Message, 
 
 // Listen subscribes a listener to incoming updates channel.
 func (b *Bot) Listen(listener UpdateListener) {
-	listener.SetBot(b)
 	updateCh := make(chan Update)
 	go b.runUpdatesChan(updateCh, new(UpdatesOpts).
 		SetTimeout(time.Minute).

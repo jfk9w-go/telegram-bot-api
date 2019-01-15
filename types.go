@@ -13,11 +13,11 @@ const (
 type (
 	// See https://core.telegram.org/bots/api#user
 	User struct {
-		ID        ID       `json:"id"`
-		IsBot     bool     `json:"is_bot"`
-		FirstName string   `json:"first_name"`
-		LastName  string   `json:"last_name"`
-		Username  Username `json:"username"`
+		ID        ID        `json:"id"`
+		IsBot     bool      `json:"is_bot"`
+		FirstName string    `json:"first_name"`
+		LastName  string    `json:"last_name"`
+		Username  *Username `json:"username"`
 	}
 
 	// See https://core.telegram.org/bots/api#chat
@@ -52,11 +52,12 @@ type (
 
 	// See https://core.telegram.org/bots/api#update
 	Update struct {
-		ID                ID       `json:"update_id"`
-		Message           *Message `json:"message"`
-		EditedMessage     *Message `json:"edited_message"`
-		ChannelPost       *Message `json:"channel_post"`
-		EditedChannelPost *Message `json:"edited_message_post"`
+		ID                ID             `json:"update_id"`
+		Message           *Message       `json:"message"`
+		EditedMessage     *Message       `json:"edited_message"`
+		ChannelPost       *Message       `json:"channel_post"`
+		EditedChannelPost *Message       `json:"edited_message_post"`
+		CallbackQuery     *CallbackQuery `json:"callback_query"`
 	}
 
 	// See https://core.telegram.org/bots/api#chatmember
@@ -64,4 +65,37 @@ type (
 		User   User   `json:"user"`
 		Status string `json:"status"`
 	}
+
+	// https://core.telegram.org/bots/api#callbackquery
+	CallbackQuery struct {
+		ID              string   `json:"id"`
+		From            User     `json:"sender"`
+		Message         *Message `json:"message"`
+		InlineMessageID *string  `json:"inline_message_id"`
+		ChatInstance    *string  `json:"chat_instance"`
+		Data            *string  `json:"data"`
+		GameShortName   *string  `json:"game_short_name"`
+	}
+
+	// https://core.telegram.org/bots/api#inlinekeyboardbutton
+	InlineKeyboardButton struct {
+		Text                         string `json:"text"`
+		URL                          string `json:"url,omitempty"`
+		CallbackData                 string `json:"callback_data,omitempty"`
+		SwitchInlineQuery            string `json:"switch_inline_query,omitempty"`
+		SwitchInlineQueryCurrentChat string `json:"switch_inline_query_current_chat,omitempty"`
+	}
+
+	ReplyMarkup interface {
+		replyMarkup() ReplyMarkup
+	}
+
+	// https://core.telegram.org/bots/api#inlinekeyboardmarkup
+	InlineKeyboardMarkup struct {
+		InlineKeyboard [][]InlineKeyboardButton `json:"inline_keyboard"`
+	}
 )
+
+func (m InlineKeyboardMarkup) replyMarkup() ReplyMarkup {
+	return m
+}
