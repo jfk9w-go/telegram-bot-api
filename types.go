@@ -69,7 +69,7 @@ type (
 	// https://core.telegram.org/bots/api#callbackquery
 	CallbackQuery struct {
 		ID              string   `json:"id"`
-		From            User     `json:"sender"`
+		From            User     `json:"from"`
 		Message         *Message `json:"message"`
 		InlineMessageID *string  `json:"inline_message_id"`
 		ChatInstance    *string  `json:"chat_instance"`
