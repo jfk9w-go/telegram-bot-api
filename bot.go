@@ -47,7 +47,7 @@ func NewBot(http *flu.Client, token string) *Bot {
 
 	upstream := pool.New().SpawnFunc(func(task *pool.Task) {
 		ptr := task.Ptr.(*taskPtr)
-		resp, err := client.send(ptr.chatID, ptr.entity, ptr.opts)
+		err := client.send(ptr.chatID, ptr.entity, ptr.opts, ptr.resp)
 		if err != nil {
 			if err, ok := err.(*TooManyMessages); ok {
 				task.Retry()
@@ -56,9 +56,7 @@ func NewBot(http *flu.Client, token string) *Bot {
 			}
 		}
 
-		ptr.resp = resp
 		task.Complete(err)
-
 		time.Sleep(UpstreamSendDelay)
 	})
 
@@ -84,19 +82,29 @@ func NewBot(http *flu.Client, token string) *Bot {
 //   https://core.telegram.org/bots/api#sendphoto
 //   https://core.telegram.org/bots/api#sendvideo
 func (b *Bot) Send(chatID ChatID, entity interface{}, opts SendOpts) (*Message, error) {
+	m := new(Message)
+	return m, b.send(chatID, entity, opts, (*message)(m))
+}
+
+func (b *Bot) SendMediaGroup(chatID ChatID, media []*MediaOpts, opts *BaseSendOpts) ([]Message, error) {
+	ms := make([]Message, 0)
+	return ms, b.send(chatID, media, opts.MediaGroup(), (*messages)(&ms))
+}
+
+func (b *Bot) send(chatID ChatID, entity interface{}, opts SendOpts, resp hasChat) error {
 	b.mu.RLock()
 	stream, ok := b.downstream[chatID]
 	b.mu.RUnlock()
 
-	ptr := &taskPtr{chatID: chatID, entity: entity, opts: opts}
+	ptr := &taskPtr{chatID: chatID, entity: entity, opts: opts, resp: resp}
 	if ok {
 		err := stream.Execute(ptr)
-		return ptr.resp, err
+		return err
 	}
 
 	err := b.upstream.Execute(ptr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	m := ptr.resp
@@ -104,23 +112,23 @@ func (b *Bot) Send(chatID ChatID, entity interface{}, opts SendOpts) (*Message, 
 	b.mu.Lock()
 	_, ok = b.downstream[chatID]
 	if !ok {
-		stream := pool.New().Spawn(b.workers[m.Chat.Type])
-		b.downstream[m.Chat.ID] = stream
-		if m.Chat.Username != nil {
-			b.downstream[*m.Chat.Username] = stream
+		stream := pool.New().Spawn(b.workers[m.chat().Type])
+		b.downstream[m.chat().ID] = stream
+		if m.chat().Username != nil {
+			b.downstream[*m.chat().Username] = stream
 		}
 	}
 
 	b.mu.Unlock()
-	return m, nil
+	return nil
 }
 
 // Listen subscribes a listener to incoming updates channel.
 func (b *Bot) Listen(listener UpdateListener) {
 	updateCh := make(chan Update)
 	go b.runUpdatesChan(updateCh, new(UpdatesOpts).
-		SetTimeout(time.Minute).
-		SetAllowedUpdates(listener.AllowedUpdates()...))
+		Timeout(time.Minute).
+		AllowedUpdates(listener.AllowedUpdates()...))
 	for update := range updateCh {
 		go listener.OnUpdate(update)
 	}
@@ -136,14 +144,14 @@ func (b *Bot) runUpdatesChan(updateCh chan<- Update, opts *UpdatesOpts) {
 
 			for _, update := range batch {
 				updateCh <- update
-				opts.SetOffset(update.ID.Increment())
+				opts.Offset(update.ID.Increment())
 			}
 
 			continue
 		}
 
 		if err != nil {
-			log.Printf("An error occured while polling: %v", err)
+			log.Printf("An error occured while polling: %Values", err)
 			time.Sleep(time.Minute)
 		}
 	}
@@ -170,6 +178,26 @@ type taskPtr struct {
 	chatID ChatID
 	entity interface{}
 	opts   SendOpts
-	resp   *Message
+	resp   hasChat
 	retry  int
+}
+
+type hasChat interface {
+	chat() *Chat
+}
+
+type message Message
+
+func (m *message) chat() *Chat {
+	return &m.Chat
+}
+
+type messages []Message
+
+func (m *messages) chat() *Chat {
+	if len(*m) == 0 {
+		return nil
+	}
+
+	return &(*m)[0].Chat
 }

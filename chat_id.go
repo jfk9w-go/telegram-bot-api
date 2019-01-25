@@ -9,13 +9,13 @@ type ID int64
 
 // ParseID tries to parse a value as ID.
 func ParseID(value string) (ID, error) {
-	var id, err = strconv.ParseInt(value, 10, 64)
+	id, err := strconv.ParseInt(value, 10, 64)
 	return ID(id), err
 }
 
 // MustParseID does what ParseID does, except on error it panics.
 func MustParseID(value string) ID {
-	var id, err = ParseID(value)
+	id, err := ParseID(value)
 	if err != nil {
 		panic(err)
 	}
@@ -24,6 +24,10 @@ func MustParseID(value string) ID {
 }
 
 func (id ID) queryParam() string {
+	if int64(id) == 0 {
+		return ""
+	}
+
 	return id.String()
 }
 

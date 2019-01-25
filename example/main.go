@@ -34,12 +34,25 @@ func main() {
 		AddFunc("/tick", func(c *telegram.Command) {
 			_, err := bot.Send(c.Chat.ID, flu.NewFileSystemResource("tick.png"), telegram.NewSendOpts().
 				DisableNotification(true).
-				ParseMode(telegram.HTML).
-				Media().
+				Media().Photo().
 				Caption("Here's a <b>tick</b> for ya.").
-				Photo())
+				ParseMode(telegram.HTML))
 			if err != nil {
 				log.Printf("Failed to send tick.png to %d: %s", c.Chat.ID, err)
+			}
+		}).
+		AddFunc("/ticks", func(c *telegram.Command) {
+			media := make([]*telegram.MediaOpts, 4)
+			for i := range media {
+				media[i] = telegram.NewMediaOpts(flu.NewFileSystemResource("tick.png")).
+					Photo().
+					Caption("Image " + strconv.Itoa(i))
+			}
+
+			_, err := bot.SendMediaGroup(c.Chat.ID, media, telegram.NewSendOpts().
+				DisableNotification(true))
+			if err != nil {
+				log.Printf("Failed to send ticks.png to %d: %s", c.Chat.ID, err)
 			}
 		}).
 		AddFunc("/count", func(c *telegram.Command) {

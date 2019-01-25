@@ -59,21 +59,20 @@ func (c *Client) GetMe() (*User, error) {
 
 // This is an umbrella method used for various /send* API calls.
 // Generally, entity should be either string or flu.ReadResource.
-// Via opts you can specify additional request options.
+// Via values you can specify additional request options.
 // The method is private since callers can hit API limits
 // and get HTTP 429 error in case of intense usage.
 // See
 //   https://core.telegram.org/bots/api#sendmessage
 //   https://core.telegram.org/bots/api#sendphoto
 //   https://core.telegram.org/bots/api#sendvideo
-func (c *Client) send(chatID ChatID, entity interface{}, opts SendOpts) (*Message, error) {
-	message := new(Message)
-	return message, c.http.NewRequest().
+func (c *Client) send(chatID ChatID, entity interface{}, opts SendOpts, resp interface{}) error {
+	return c.http.NewRequest().
 		Post().
 		Endpoint(c.endpoint("/send" + opts.entityType())).
 		Body(opts.body(chatID, entity)).
 		Execute().
-		ReadResponseFunc(defaultResponseProcessor(message)).
+		ReadResponseFunc(defaultResponseProcessor(resp)).
 		Error
 }
 
@@ -148,12 +147,12 @@ func (c *Client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 // The answer will be displayed to the user as a notification at the top of the chat screen or as an alert.
 // On success, True is returned.
 // https://core.telegram.org/bots/api#answercallbackquery
-func (c *Client) AnswerCallbackQuery(id string, opts AnswerCallbackQueryOpts) (bool, error) {
+func (c *Client) AnswerCallbackQuery(id string, opts *AnswerCallbackQueryOpts) (bool, error) {
 	var r bool
 	return r, c.http.NewRequest().
 		Post().
 		Endpoint(c.endpoint("/answerCallbackQuery")).
-		Body(opts.body().Add("callback_query_id", id)).
+		Body(opts.body(id)).
 		Execute().
 		ReadResponseFunc(defaultResponseProcessor(&r)).
 		Error

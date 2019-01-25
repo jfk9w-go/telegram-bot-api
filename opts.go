@@ -2,10 +2,12 @@ package telegram
 
 import (
 	"encoding/json"
-	"fmt"
-	"net/url"
+	"log"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/jfk9w-go/lego"
 
 	"github.com/jfk9w-go/flu"
 )
@@ -27,34 +29,6 @@ const (
 	MaxCaptionSize = 1024
 )
 
-// BaseOpts is a base type used for building various request options.
-type BaseOpts url.Values
-
-func (opts BaseOpts) values() url.Values {
-	return url.Values(opts)
-}
-
-// Add adds a key-value pair to the map and returns itself.
-func (opts BaseOpts) Add(key, value string) BaseOpts {
-	opts.values().Add(key, value)
-	return opts
-}
-
-// AddAll adds all key-value pairs for value in values to the map and returns itself.
-func (opts BaseOpts) AddAll(key string, values ...string) BaseOpts {
-	for _, value := range values {
-		opts.values().Add(key, value)
-	}
-
-	return opts
-}
-
-// Set sets a key-value pair in the underlying map.
-func (opts BaseOpts) Set(key, value string) BaseOpts {
-	opts.values().Set(key, value)
-	return opts
-}
-
 // UpdatesOpts is /getUpdates request options.
 // See https://core.telegram.org/bots/api#getupdates
 type UpdatesOpts struct {
@@ -65,306 +39,251 @@ type UpdatesOpts struct {
 	// higher than its update_id. The negative offset can be specified to retrieve updates
 	// starting from -offset update from the end of the updates queue.
 	// All previous updates will be forgotten.
-	Offset *ID
+	Offset_ ID `json:"offset,omitempty"`
 	// Limits the number of updates to be retrieved.
 	// Values between 1—100 are accepted. Defaults to 100.
-	Limit *int
+	Limit_ int `json:"limit,omitempty"`
 	// Timeout for long polling.
-	Timeout *time.Duration
+	Timeout_ int `json:"timeout,omitempty"`
 	// List the types of updates you want your bot to receive.
-	AllowedUpdates []string
+	AllowedUpdates_ []string `json:"allowed_updates,omitempty"`
 }
 
-// SetOffset sets the update offset and returns itself.
-func (opts *UpdatesOpts) SetOffset(offset ID) *UpdatesOpts {
-	opts.Offset = &offset
+// Offset sets the update offset and returns itself.
+func (opts *UpdatesOpts) Offset(offset ID) *UpdatesOpts {
+	opts.Offset_ = offset
 	return opts
 }
 
-// SetLimit sets the limit and returns itself.
-func (opts *UpdatesOpts) SetLimit(limit int) *UpdatesOpts {
-	opts.Limit = &limit
+// Limit sets the limit and returns itself.
+func (opts *UpdatesOpts) Limit(limit int) *UpdatesOpts {
+	opts.Limit_ = limit
 	return opts
 }
 
-// SetTimeout sets the timeout and returns itself.
-func (opts *UpdatesOpts) SetTimeout(timeout time.Duration) *UpdatesOpts {
-	opts.Timeout = &timeout
+// Timeout sets the timeout and returns itself.
+func (opts *UpdatesOpts) Timeout(timeout time.Duration) *UpdatesOpts {
+	opts.Timeout_ = int(timeout.Seconds())
 	return opts
 }
 
-// SetAllowedUpdates sets the allowed updates and returns itself.
-func (opts *UpdatesOpts) SetAllowedUpdates(allowedUpdates ...string) *UpdatesOpts {
-	opts.AllowedUpdates = allowedUpdates
+// AllowedUpdates sets the allowed updates and returns itself.
+func (opts *UpdatesOpts) AllowedUpdates(allowedUpdates ...string) *UpdatesOpts {
+	opts.AllowedUpdates_ = allowedUpdates
 	return opts
 }
 
 func (opts *UpdatesOpts) body() flu.BodyWriter {
-	form := flu.Form()
-	if opts.Offset != nil {
-		form.Add("offset", opts.Offset.queryParam())
-	}
-	if opts.Limit != nil {
-		form.Add("limit", strconv.Itoa(*opts.Limit))
-	}
-	if opts.Timeout != nil {
-		form.Add("timeout", strconv.Itoa(int(opts.Timeout.Seconds())))
-	}
-	if opts.AllowedUpdates != nil {
-		form.AddAll("allowed_updates", opts.AllowedUpdates...)
-	}
-
-	return form
+	return flu.JSON(opts)
 }
 
-// SendOpts represents request options provided for /send* API call.
 type SendOpts interface {
 	body(ChatID, interface{}) flu.BodyWriter
 	entityType() string
 }
 
-// BaseSendOpts is a base type used for building SendOpts.
-type BaseSendOpts BaseOpts
-
-// NewSendOpts creates an empty BaseSendOpts instance.
-func NewSendOpts() BaseSendOpts {
-	return BaseSendOpts{}
+type BaseSendOpts struct {
+	DisableNotification_ bool `url:"disable_notification,omitempty"`
+	ReplyToMessageID_    ID   `url:"reply_to_message_id,omitempty"`
 }
 
-func (opts BaseSendOpts) base() BaseOpts {
-	return BaseOpts(opts)
+func NewSendOpts() *BaseSendOpts {
+	return new(BaseSendOpts)
 }
 
-// ParseMode sets the parse_mode request parameter and returns itself.
-// Send Markdown or HTML, if you want Telegram apps to show bold,
-// italic, fixed-width text or inline URLs in your bot's message.
-func (opts BaseSendOpts) ParseMode(parseMode ParseMode) BaseSendOpts {
-	opts.base().Add("parse_mode", string(parseMode))
+func (opts *BaseSendOpts) DisableNotification(disableNotification bool) *BaseSendOpts {
+	opts.DisableNotification_ = disableNotification
 	return opts
 }
 
-// DisableNotifications sets the disable_notification request parameter and returns itself.
-// Sends the message silently. Users will receive a notification with no sound.
-func (opts BaseSendOpts) DisableNotification(disableNotification bool) BaseSendOpts {
-	if disableNotification {
-		opts.base().Add("disable_notification", "true")
+func (opts *BaseSendOpts) ReplyToMessageID(replyToMessageID ID) *BaseSendOpts {
+	opts.ReplyToMessageID_ = replyToMessageID
+	return opts
+}
+
+func (opts *BaseSendOpts) Message() *MessageOpts {
+	return &MessageOpts{
+		BaseSendOpts: opts,
 	}
-
-	return opts
 }
 
-// ReplyToMessageID sets the reply_to_message_id request parameter and returns itself.
-// If the message is a reply, ID of the original message
-func (opts BaseSendOpts) ReplyToMessageID(replyToMessageID ID) BaseSendOpts {
-	opts.base().Add("reply_to_message_id", replyToMessageID.queryParam())
-	return opts
-}
-
-// Message converts this instance to MessageOpts for /sendMessage API call.
-func (opts BaseSendOpts) Message() MessageOpts {
-	return MessageOpts(opts)
-}
-
-// Media converts this instance to MediaOpts for setting common /send* media API calls.
-func (opts BaseSendOpts) Media() MediaOpts {
-	return MediaOpts(opts)
-}
-
-// MessageOpts is used for setting options for /sendMessage API call.
-// See https://core.telegram.org/bots/api#sendmessage
-type MessageOpts BaseSendOpts
-
-func (opts MessageOpts) base() BaseSendOpts {
-	return BaseSendOpts(opts)
-}
-
-// DisableWebPagePreview sets the disable_web_page_preview request parameter and returns itself.
-// Disables link previews for links in this message
-func (opts MessageOpts) DisableWebPagePreview(disableWebPagePreview bool) MessageOpts {
-	if disableWebPagePreview {
-		opts.base().base().Add("disable_web_page_preview", "true")
+func (opts *BaseSendOpts) Media() *MediaOpts {
+	return &MediaOpts{
+		BaseSendOpts: opts,
 	}
+}
 
+func (opts *BaseSendOpts) MediaGroup() *MediaGroupOpts {
+	return &MediaGroupOpts{
+		BaseSendOpts: opts,
+	}
+}
+
+type MessageOpts struct {
+	*BaseSendOpts
+	ParseMode_             ParseMode `url:"parse_mode,omitempty"`
+	DisableWebPagePreview_ bool      `url:"disable_web_page_preview,omitempty"`
+	ReplyMarkup_           ReplyMarkup
+}
+
+func (opts *MessageOpts) ParseMode(parseMode ParseMode) *MessageOpts {
+	opts.ParseMode_ = parseMode
 	return opts
 }
 
-// Additional interface options. A JSON-serialized object for an inline keyboard, custom reply keyboard,
-// instructions to remove reply keyboard or to force a reply from the user.
-func (opts MessageOpts) ReplyMarkup(markup ReplyMarkup) MessageOpts {
-	markupData, _ := json.Marshal(markup)
-	opts.base().base().Set("reply_markup", string(markupData))
+func (opts *MessageOpts) DisableWebPagePreview(disableWebPagePreview bool) *MessageOpts {
+	opts.DisableWebPagePreview_ = disableWebPagePreview
 	return opts
 }
 
-func (opts MessageOpts) body(chatID ChatID, entity interface{}) flu.BodyWriter {
-	return flu.FormWith(opts.base().base().values()).
-		Add("text", entity.(string)).
-		Add("chat_id", chatID.queryParam())
+func (opts *MessageOpts) ReplyMarkup(replyMarkup ReplyMarkup) *MessageOpts {
+	opts.ReplyMarkup_ = replyMarkup
+	return opts
 }
 
-func (opts MessageOpts) entityType() string {
+func (opts *MessageOpts) entityType() string {
 	return "Message"
 }
 
-// MediaOpts is used for setting options for /send* media API call.
-type MediaOpts BaseSendOpts
+func (opts *MessageOpts) body(chatID ChatID, entity interface{}) flu.BodyWriter {
+	form := flu.Form(opts).
+		Add("chat_id", chatID.queryParam()).
+		Add("text", entity.(string))
 
-func (opts MediaOpts) send() BaseSendOpts {
-	return BaseSendOpts(opts)
-}
-
-// Caption sets the caption request parameter and returns itself.
-// Media caption (may also be used when resending media files by file_id), 0-1024 characters
-func (opts MediaOpts) Caption(caption string) MediaOpts {
-	if caption != "" {
-		opts.send().base().Add("caption", caption)
+	if opts.ReplyMarkup_ != nil {
+		replyMarkupJSON, err := json.Marshal(opts.ReplyMarkup_)
+		lego.Check(err)
+		form.Add("reply_markup", string(replyMarkupJSON))
 	}
 
+	return form
+}
+
+type MediaOpts struct {
+	*BaseSendOpts
+	media_     interface{}
+	Type_      string    `json:"type,omitempty"`
+	Media_     string    `json:"media,omitempty"`
+	Caption_   string    `json:"caption,omitempty" url:"caption,omitempty"`
+	ParseMode_ ParseMode `json:"parse_mode,omitempty" url:"parse_mode,omitempty"`
+}
+
+func NewMediaOpts(entity interface{}) *MediaOpts {
+	return &MediaOpts{
+		media_: entity,
+	}
+}
+
+func (opts *MediaOpts) Photo() *MediaOpts {
+	opts.Type_ = "photo"
 	return opts
 }
 
-// Document converts MediaOpts to PhotoOpts.
-func (opts MediaOpts) Document() DocumentOpts {
-	return DocumentOpts(opts)
+func (opts *MediaOpts) Video() *MediaOpts {
+	opts.Type_ = "video"
+	return opts
 }
 
-// Photo converts MediaOpts to PhotoOpts.
-func (opts MediaOpts) Photo() PhotoOpts {
-	return PhotoOpts(opts)
+func (opts *MediaOpts) Document() *MediaOpts {
+	opts.Type_ = "document"
+	return opts
 }
 
-// Video converts MediaOpts to VideoOpts.
-func (opts MediaOpts) Video() VideoOpts {
-	return VideoOpts(opts)
+func (opts *MediaOpts) Caption(caption string) *MediaOpts {
+	opts.Caption_ = caption
+	return opts
 }
 
-func (opts MediaOpts) body(chatID ChatID, entityType string, entity interface{}) flu.BodyWriter {
-	opts.send().base().Add("chat_id", chatID.queryParam())
+func (opts *MediaOpts) ParseMode(parseMode ParseMode) *MediaOpts {
+	opts.ParseMode_ = parseMode
+	return opts
+}
+
+func (opts *MediaOpts) entityType() string {
+	return strings.ToTitle(opts.Type_)
+}
+
+func (opts *MediaOpts) body(chatID ChatID, entity interface{}) flu.BodyWriter {
+	form := flu.Form(opts).Add("chat_id", chatID.queryParam())
 	switch entity := entity.(type) {
 	case string:
-		return flu.FormWith(opts.send().base().values()).
-			Add(entityType, entity)
+		return form.Add(opts.Type_, entity)
 
 	case flu.ReadResource:
-		return flu.MultipartFormWith(opts.send().base().values()).
-			Resource(entityType, entity)
+		return form.Multipart().Resource(opts.Type_, entity)
+	}
 
-	default:
-		panic(fmt.Errorf("unrecognized entity type: %T", entity))
+	log.Panicf("invalid entity type: %T", entity)
+	return nil
+}
+
+type MediaGroupOpts struct {
+	*BaseSendOpts
+}
+
+func (opts *MediaGroupOpts) entityType() string {
+	return "MediaGroup"
+}
+
+func (opts *MediaGroupOpts) body(chatID ChatID, entity interface{}) flu.BodyWriter {
+	form := flu.Form(opts).Add("chat_id", chatID.queryParam())
+	media := entity.([]*MediaOpts)
+	isMultipart := false
+	for i, media := range media {
+		switch entity := media.media_.(type) {
+		case string:
+			media.Media_ = entity
+
+		case flu.ReadResource:
+			id := "media" + strconv.Itoa(i)
+			form.Multipart().Resource(id, entity)
+			media.Media_ = "attach://" + id
+			isMultipart = true
+		}
+	}
+
+	mediaJSON, err := json.Marshal(media)
+	lego.Check(err)
+	form.Add("media", string(mediaJSON))
+
+	if isMultipart {
+		return form.Multipart()
+	} else {
+		return form
 	}
 }
 
-// DocumentOpts is used to pass the options to /sendDocument API call.
-// See https://core.telegram.org/bots/api#senddocument
-type DocumentOpts MediaOpts
-
-func (opts DocumentOpts) media() MediaOpts {
-	return MediaOpts(opts)
+type AnswerCallbackQueryOpts struct {
+	Text_      string `url:"text,omitempty"`
+	ShowAlert_ bool   `url:"show_alert,omitempty"`
+	URL_       string `url:"url,omitempty"`
+	CacheTime_ int    `url:"cache_time,omitempty"`
 }
 
-func (opts DocumentOpts) body(chatId ChatID, entity interface{}) flu.BodyWriter {
-	return opts.media().body(chatId, "document", entity)
+func NewAnswerCallbackQueryOpts() *AnswerCallbackQueryOpts {
+	return new(AnswerCallbackQueryOpts)
 }
 
-func (opts DocumentOpts) entityType() string {
-	return "Document"
-}
-
-// PhotoOpts is used to pass the options to /sendPhoto API call.
-// See https://core.telegram.org/bots/api#sendphoto
-type PhotoOpts MediaOpts
-
-func (opts PhotoOpts) media() MediaOpts {
-	return MediaOpts(opts)
-}
-
-func (opts PhotoOpts) body(chatID ChatID, entity interface{}) flu.BodyWriter {
-	return opts.media().body(chatID, "photo", entity)
-}
-
-func (opts PhotoOpts) entityType() string {
-	return "Photo"
-}
-
-// VideoOpts is used to pass the options to /sendVideo API call.
-// See https://core.telegram.org/bots/api#sendvideo
-type VideoOpts MediaOpts
-
-func (opts VideoOpts) media() MediaOpts {
-	return MediaOpts(opts)
-}
-
-// Duration sets the duration request parameter and returns itself.
-// Duration of sent video in seconds
-func (opts VideoOpts) Duration(duration int) VideoOpts {
-	opts.media().send().base().Add("duration", strconv.Itoa(duration))
+func (opts *AnswerCallbackQueryOpts) Text(text string) *AnswerCallbackQueryOpts {
+	opts.Text_ = text
 	return opts
 }
 
-// Height sets the height request parameter and returns itself.
-// Video height
-func (opts VideoOpts) Height(height int) VideoOpts {
-	opts.media().send().base().Add("height", strconv.Itoa(height))
+func (opts *AnswerCallbackQueryOpts) ShowAlert(showAlert bool) *AnswerCallbackQueryOpts {
+	opts.ShowAlert_ = showAlert
 	return opts
 }
 
-// Width sets the width request parameter and returns itself.
-// Video width
-func (opts VideoOpts) Width(width int) VideoOpts {
-	opts.media().send().base().Add("width", strconv.Itoa(width))
+func (opts *AnswerCallbackQueryOpts) URL(url string) *AnswerCallbackQueryOpts {
+	opts.URL_ = url
 	return opts
 }
 
-func (opts VideoOpts) body(chatID ChatID, entity interface{}) flu.BodyWriter {
-	return opts.media().body(chatID, "video", entity)
-}
-
-func (opts VideoOpts) entityType() string {
-	return "Video"
-}
-
-type AnswerCallbackQueryOpts BaseOpts
-
-func NewAnswerCallbackQueryOpts() AnswerCallbackQueryOpts {
-	return AnswerCallbackQueryOpts{}
-}
-
-func (opts AnswerCallbackQueryOpts) base() BaseOpts {
-	return BaseOpts(opts)
-}
-
-func (opts AnswerCallbackQueryOpts) Text(text string) AnswerCallbackQueryOpts {
-	if text != "" {
-		opts.base().Set("text", text)
-	}
-
+func (opts *AnswerCallbackQueryOpts) CacheTime(cacheTime time.Duration) *AnswerCallbackQueryOpts {
+	opts.CacheTime_ = int(cacheTime.Minutes())
 	return opts
 }
 
-func (opts AnswerCallbackQueryOpts) ShowAlert(showAlert bool) AnswerCallbackQueryOpts {
-	if showAlert {
-		opts.base().Set("show_alert", "true")
-	}
-
-	return opts
-}
-
-func (opts AnswerCallbackQueryOpts) URL(url string) AnswerCallbackQueryOpts {
-	if url != "" {
-		opts.base().Set("url", url)
-	}
-
-	return opts
-}
-
-func (opts AnswerCallbackQueryOpts) CacheTime(cacheTime time.Duration) AnswerCallbackQueryOpts {
-	if cacheTime.Seconds() > 0 {
-		opts.base().Set("cache_time", fmt.Sprintf("%.0f", cacheTime.Seconds()))
-	}
-
-	return opts
-}
-
-func (opts AnswerCallbackQueryOpts) body() flu.FormBody {
-	return flu.FormWith(opts.base().values())
+func (opts *AnswerCallbackQueryOpts) body(id string) flu.BodyWriter {
+	return flu.Form(opts).Add("callback_query_id", id)
 }

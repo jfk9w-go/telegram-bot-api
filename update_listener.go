@@ -10,7 +10,7 @@ import (
 type UpdateListener interface {
 	// OnUpdate is called on every received Update.
 	OnUpdate(Update)
-	// AllowedUpdates is the allowed_updates parameter passed
+	// AllowedUpdates_ is the allowed_updates parameter passed
 	// in API calls to /getUpdates or /setWebhook.
 	AllowedUpdates() []string
 }
@@ -49,7 +49,7 @@ func (cul *CommandUpdateListener) OnUpdate(update Update) {
 		return
 	}
 
-	cmd.b = cul.b
+	cmd.bot = cul.b
 	if listener, ok := cul.listeners[cmd.Key]; ok {
 		listener.OnCommand(cmd)
 	}
@@ -131,17 +131,16 @@ type Command struct {
 	Payload   string
 
 	callbackQueryID *string
-
-	b *Bot
+	bot             *Bot
 }
 
 func (c *Command) reply(text string) {
 	var err error
 	if c.callbackQueryID != nil {
-		_, err = c.b.AnswerCallbackQuery(*c.callbackQueryID, NewAnswerCallbackQueryOpts().
+		_, err = c.bot.AnswerCallbackQuery(*c.callbackQueryID, NewAnswerCallbackQueryOpts().
 			Text(text))
 	} else if text != "" {
-		_, err = c.b.Send(c.Chat.ID, text, NewSendOpts().
+		_, err = c.bot.Send(c.Chat.ID, text, NewSendOpts().
 			DisableNotification(true).
 			ReplyToMessageID(c.MessageID).
 			Message().
