@@ -151,7 +151,7 @@ func (b *Bot) runUpdatesChan(updateCh chan<- Update, opts *UpdatesOpts) {
 		}
 
 		if err != nil {
-			log.Printf("An error occured while polling: %Values", err)
+			log.Printf("An error occured while polling: %v", err)
 			time.Sleep(time.Minute)
 		}
 	}
