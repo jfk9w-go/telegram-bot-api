@@ -91,7 +91,7 @@ func (b *Bot) SendMediaGroup(chatID ChatID, media []*MediaOpts, opts *BaseSendOp
 	return ms, b.send(chatID, media, opts.MediaGroup(), (*messages)(&ms))
 }
 
-func (b *Bot) send(chatID ChatID, entity interface{}, opts SendOpts, resp hasChat) error {
+func (b *Bot) send(chatID ChatID, entity interface{}, opts SendOpts, resp sendResponse) error {
 	b.mu.RLock()
 	stream, ok := b.downstream[chatID]
 	b.mu.RUnlock()
@@ -178,11 +178,11 @@ type taskPtr struct {
 	chatID ChatID
 	entity interface{}
 	opts   SendOpts
-	resp   hasChat
+	resp   sendResponse
 	retry  int
 }
 
-type hasChat interface {
+type sendResponse interface {
 	chat() *Chat
 }
 
