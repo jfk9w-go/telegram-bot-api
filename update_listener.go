@@ -18,7 +18,7 @@ type UpdateListener interface {
 // CommandUpdateListener is an UpdateListener handling incoming bot commands
 // with message and edited_message allowed updates.
 type CommandUpdateListener struct {
-	b         *Bot
+	bot       *Bot
 	listeners map[string]CommandListener
 }
 
@@ -49,14 +49,14 @@ func (cul *CommandUpdateListener) OnUpdate(update Update) {
 		return
 	}
 
-	cmd.bot = cul.b
+	cmd.bot = cul.bot
 	if listener, ok := cul.listeners[cmd.Key]; ok {
 		listener.OnCommand(cmd)
 	}
 }
 
 func (cul *CommandUpdateListener) AllowedUpdates() []string {
-	return []string{"message", "edited_message"}
+	return []string{"message", "edited_message", "callback_query"}
 }
 
 func extractCommand(update Update) *Command {
