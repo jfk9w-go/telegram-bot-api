@@ -1,7 +1,6 @@
 package telegram
 
 import (
-	"encoding/json"
 	"log"
 	"strings"
 	"sync"
@@ -186,21 +185,8 @@ func (b *Bot) send(chatID ChatID, sendable BaseSendable, opts *SendOpts, resp in
 
 	form.Set("chat_id", chatID.queryParam())
 	if opts != nil {
-		if opts.DisableNotification {
-			form.Set("disable_notification", "1")
-		}
-
-		if opts.ReplyToMessageID != 0 {
-			form.Set("reply_to_message_id", opts.ReplyToMessageID.queryParam())
-		}
-
-		if opts.ReplyMarkup != nil {
-			bytes, err := json.Marshal(opts.ReplyMarkup)
-			if err != nil {
-				return errors.Wrap(err, "failed to serialize reply_markup")
-			}
-
-			form.Set("reply_markup", string(bytes))
+		if err := opts.write(form); err != nil {
+			return errors.Wrap(err, "failed to write SendOpts")
 		}
 	}
 

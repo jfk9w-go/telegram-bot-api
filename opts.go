@@ -1,7 +1,10 @@
 package telegram
 
 import (
+	"encoding/json"
+
 	"github.com/jfk9w-go/flu"
+	"github.com/pkg/errors"
 )
 
 // ParseMode is a parse_mode request parameter type.
@@ -41,14 +44,35 @@ type UpdatesOpts struct {
 	AllowedUpdates []string `json:"allowed_updates,omitempty"`
 }
 
-func (opts *UpdatesOpts) body() flu.BodyWriter {
-	return flu.JSON(opts)
+func (o *UpdatesOpts) body() flu.BodyWriter {
+	return flu.JSON(o)
 }
 
 type SendOpts struct {
 	DisableNotification bool
 	ReplyToMessageID    ID
 	ReplyMarkup         ReplyMarkup
+}
+
+func (o *SendOpts) write(form *flu.FormBody) error {
+	if o.DisableNotification {
+		form.Set("disable_notification", "1")
+	}
+
+	if o.ReplyToMessageID != 0 {
+		form.Set("reply_to_message_id", o.ReplyToMessageID.queryParam())
+	}
+
+	if o.ReplyMarkup != nil {
+		bytes, err := json.Marshal(o.ReplyMarkup)
+		if err != nil {
+			return errors.Wrap(err, "failed to serialize reply_markup")
+		}
+
+		form.Set("reply_markup", string(bytes))
+	}
+
+	return nil
 }
 
 type AnswerCallbackQueryOpts struct {
@@ -58,6 +82,6 @@ type AnswerCallbackQueryOpts struct {
 	CacheTime int    `url:"cache_time,omitempty"`
 }
 
-func (opts *AnswerCallbackQueryOpts) body(id string) flu.BodyWriter {
-	return flu.Form(opts).Add("callback_query_id", id)
+func (o *AnswerCallbackQueryOpts) body(id string) flu.BodyWriter {
+	return flu.Form(o).Add("callback_query_id", id)
 }
