@@ -14,19 +14,20 @@ import (
 // It can not be instantiated by package users.
 // Instead, it should be used as part of Bot.
 type Client struct {
-	http    *flu.Client
-	baseURI string
+	httpClient *flu.Client
+	baseURI    string
 }
 
-func newClient(http *flu.Client, token string) *Client {
-	if http == nil {
-		http = flu.NewClient(nil).
-			ResponseHeaderTimeout(80 * time.Second)
+func newClient(httpClient *flu.Client, token string) *Client {
+	if httpClient == nil {
+		httpClient = flu.NewTransport().
+			ResponseHeaderTimeout(2 * time.Minute).
+			NewClient()
 	}
 
 	return &Client{
-		http:    http,
-		baseURI: "https://api.telegram.org/bot" + token,
+		httpClient: httpClient,
+		baseURI:    "https://api.telegram.org/bot" + token,
 	}
 }
 
@@ -35,12 +36,12 @@ func newClient(http *flu.Client, token string) *Client {
 // See https://core.telegram.org/bots/api#getupdates
 func (c *Client) GetUpdates(opts *UpdatesOpts) ([]Update, error) {
 	updates := make([]Update, 0)
-	return updates, c.http.NewRequest().
-		Post().
-		Endpoint(c.endpoint("/getUpdates")).
+	return updates, c.httpClient.NewRequest().
+		POST().
+		Resource(c.method("/getUpdates")).
 		Body(opts.body()).
-		Execute().
-		ReadResponseFunc(defaultResponseProcessor(&updates)).
+		Send().
+		ReadResponseFunc(readResponse(&updates)).
 		Error
 }
 
@@ -49,16 +50,16 @@ func (c *Client) GetUpdates(opts *UpdatesOpts) ([]Update, error) {
 // See https://core.telegram.org/bots/api#getme
 func (c *Client) GetMe() (*User, error) {
 	user := new(User)
-	return user, c.http.NewRequest().
-		Get().
-		Endpoint(c.endpoint("/getMe")).
-		Execute().
-		ReadResponseFunc(defaultResponseProcessor(user)).
+	return user, c.httpClient.NewRequest().
+		GET().
+		Resource(c.method("/getMe")).
+		Send().
+		ReadResponseFunc(readResponse(user)).
 		Error
 }
 
 // This is an umbrella method used for various /send* API calls.
-// Generally, entity should be either string or flu.ReadResource.
+// Generally, BaseSendable should be either string or flu.ReadResource.
 // Via values you can specify additional request options.
 // The method is private since callers can hit API limits
 // and get HTTP 429 error in case of intense usage.
@@ -66,13 +67,13 @@ func (c *Client) GetMe() (*User, error) {
 //   https://core.telegram.org/bots/api#sendmessage
 //   https://core.telegram.org/bots/api#sendphoto
 //   https://core.telegram.org/bots/api#sendvideo
-func (c *Client) send(chatID ChatID, entity interface{}, opts SendOpts, resp interface{}) error {
-	return c.http.NewRequest().
-		Post().
-		Endpoint(c.endpoint("/send" + opts.entityType())).
-		Body(opts.body(chatID, entity)).
-		Execute().
-		ReadResponseFunc(defaultResponseProcessor(resp)).
+func (c *Client) send(url string, body flu.BodyWriter, resp interface{}) error {
+	return c.httpClient.NewRequest().
+		POST().
+		Resource(url).
+		Body(body).
+		Send().
+		ReadResponseFunc(readResponse(resp)).
 		Error
 }
 
@@ -87,13 +88,13 @@ func (c *Client) send(chatID ChatID, entity interface{}, opts SendOpts, resp int
 //    https://core.telegram.org/bots/api#deletemessage
 func (c *Client) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 	var r bool
-	return r, c.http.NewRequest().
-		Get().
-		Endpoint(c.endpoint("/deleteMessage")).
+	return r, c.httpClient.NewRequest().
+		GET().
+		Resource(c.method("/deleteMessage")).
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("message_id", messageID.queryParam()).
-		Execute().
-		ReadResponseFunc(defaultResponseProcessor(&r)).
+		Send().
+		ReadResponseFunc(readResponse(&r)).
 		Error
 }
 
@@ -103,12 +104,12 @@ func (c *Client) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 // See https://core.telegram.org/bots/api#getchat
 func (c *Client) GetChat(chatID ChatID) (*Chat, error) {
 	chat := new(Chat)
-	return chat, c.http.NewRequest().
-		Get().
-		Endpoint(c.endpoint("/getChat")).
+	return chat, c.httpClient.NewRequest().
+		GET().
+		Resource(c.method("/getChat")).
 		QueryParam("chat_id", chatID.queryParam()).
-		Execute().
-		ReadResponseFunc(defaultResponseProcessor(chat)).
+		Send().
+		ReadResponseFunc(readResponse(chat)).
 		Error
 }
 
@@ -119,12 +120,12 @@ func (c *Client) GetChat(chatID ChatID) (*Chat, error) {
 // See https://core.telegram.org/bots/api#getchatadministrators
 func (c *Client) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 	members := make([]ChatMember, 0)
-	return members, c.http.NewRequest().
-		Get().
-		Endpoint(c.endpoint("/getChatAdministrators")).
+	return members, c.httpClient.NewRequest().
+		GET().
+		Resource(c.method("/getChatAdministrators")).
 		QueryParam("chat_id", chatID.queryParam()).
-		Execute().
-		ReadResponseFunc(defaultResponseProcessor(&members)).
+		Send().
+		ReadResponseFunc(readResponse(&members)).
 		Error
 }
 
@@ -133,13 +134,13 @@ func (c *Client) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 // See https://core.telegram.org/bots/api#getchatmember
 func (c *Client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 	member := new(ChatMember)
-	return member, c.http.NewRequest().
-		Get().
-		Endpoint(c.endpoint("/getChatMember")).
+	return member, c.httpClient.NewRequest().
+		GET().
+		Resource(c.method("/getChatMember")).
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("user_id", userID.queryParam()).
-		Execute().
-		ReadResponseFunc(defaultResponseProcessor(member)).
+		Send().
+		ReadResponseFunc(readResponse(member)).
 		Error
 }
 
@@ -149,20 +150,20 @@ func (c *Client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 // https://core.telegram.org/bots/api#answercallbackquery
 func (c *Client) AnswerCallbackQuery(id string, opts *AnswerCallbackQueryOpts) (bool, error) {
 	var r bool
-	return r, c.http.NewRequest().
-		Post().
-		Endpoint(c.endpoint("/answerCallbackQuery")).
+	return r, c.httpClient.NewRequest().
+		POST().
+		Resource(c.method("/answerCallbackQuery")).
 		Body(opts.body(id)).
-		Execute().
-		ReadResponseFunc(defaultResponseProcessor(&r)).
+		Send().
+		ReadResponseFunc(readResponse(&r)).
 		Error
 }
 
-func (c *Client) endpoint(method string) string {
+func (c *Client) method(method string) string {
 	return c.baseURI + method
 }
 
-func defaultResponseProcessor(value interface{}) flu.ReadResponseFunc {
+func readResponse(value interface{}) flu.ReadResponseFunc {
 	return func(resp *http.Response) error {
 		if _, ok := allowedStatusCodes[resp.StatusCode]; !ok {
 			return fmt.Errorf("invalid status code: %d", resp.StatusCode)

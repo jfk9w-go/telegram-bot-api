@@ -32,25 +32,29 @@ func main() {
 			c.TextReply("Hello, " + c.User.FirstName)
 		}).
 		AddFunc("/tick", func(c *telegram.Command) {
-			_, err := bot.Send(c.Chat.ID, flu.NewFileSystemResource("tick.png"), telegram.NewSendOpts().
-				DisableNotification(true).
-				Media().Photo().
-				Caption("Here's a <b>tick</b> for ya.").
-				ParseMode(telegram.HTML))
+			_, err := bot.Send(c.Chat.ID,
+				&telegram.Media{
+					Type:      "photo",
+					Resource:  flu.NewFileSystemResource("tick.png"),
+					Caption:   "Here's a <b>tick</b> for ya.",
+					ParseMode: telegram.HTML,
+				},
+				&telegram.SendOpts{DisableNotification: true})
 			if err != nil {
 				log.Printf("Failed to send tick.png to %d: %s", c.Chat.ID, err)
 			}
 		}).
 		AddFunc("/ticks", func(c *telegram.Command) {
-			media := make([]*telegram.MediaOpts, 4)
+			media := make([]telegram.Media, 4)
 			for i := range media {
-				media[i] = telegram.NewMediaOpts(flu.NewFileSystemResource("tick.png")).
-					Photo().
-					Caption("Image " + strconv.Itoa(i))
+				media[i] = telegram.Media{
+					Type:     "photo",
+					Resource: flu.NewFileSystemResource("tick.png"),
+					Caption:  "Image " + strconv.Itoa(i),
+				}
 			}
 
-			_, err := bot.SendMediaGroup(c.Chat.ID, media, telegram.NewSendOpts().
-				DisableNotification(true))
+			_, err := bot.SendMediaGroup(c.Chat.ID, media, &telegram.SendOpts{DisableNotification: true})
 			if err != nil {
 				log.Printf("Failed to send ticks.png to %d: %s", c.Chat.ID, err)
 			}
@@ -85,7 +89,7 @@ func main() {
 			}
 
 			timeout := time.Duration(timeoutSecs) * time.Second
-			m, err := bot.Send(c.Chat.ID, fields[0], telegram.NewSendOpts().Message())
+			m, err := bot.Send(c.Chat.ID, &telegram.Text{Text: fields[0]}, nil)
 			if err != nil {
 				c.ErrorReply(err)
 				return
@@ -107,9 +111,10 @@ func main() {
 				return
 			}
 
-			_, err := bot.Send(c.Chat.ID, "Here you go.", telegram.NewSendOpts().
-				Message().
-				ReplyMarkup(telegram.CommandButton("Say "+c.Payload, "say", c.Payload)))
+			_, err := bot.Send(c.Chat.ID,
+				&telegram.Text{Text: "Here you go."},
+				&telegram.SendOpts{ReplyMarkup: telegram.CommandButton("Say "+c.Payload, "say", c.Payload)})
+
 			if err != nil {
 				log.Println("Failed to send button", err)
 			}

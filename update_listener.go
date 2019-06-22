@@ -137,14 +137,11 @@ type Command struct {
 func (c *Command) reply(text string) {
 	var err error
 	if c.callbackQueryID != nil {
-		_, err = c.bot.AnswerCallbackQuery(*c.callbackQueryID, NewAnswerCallbackQueryOpts().
-			Text(text))
+		_, err = c.bot.AnswerCallbackQuery(*c.callbackQueryID, &AnswerCallbackQueryOpts{Text: text})
 	} else if text != "" {
-		_, err = c.bot.Send(c.Chat.ID, text, NewSendOpts().
-			DisableNotification(true).
-			ReplyToMessageID(c.MessageID).
-			Message().
-			DisableWebPagePreview(true))
+		_, err = c.bot.Send(c.Chat.ID,
+			&Text{Text: text, DisableWebPagePreview: true},
+			&SendOpts{DisableNotification: true, ReplyToMessageID: c.MessageID})
 	}
 
 	if err != nil {
