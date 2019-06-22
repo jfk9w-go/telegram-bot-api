@@ -80,8 +80,9 @@ func (b *Bot) runSendWorker() {
 		if err != nil {
 			if floodErr, ok := err.(*TooManyMessages); ok {
 				log.Println(strings.Title(err.Error()))
-				time.Sleep(floodErr.RetryAfter)
 				b.sendQueue <- req
+				time.Sleep(floodErr.RetryAfter)
+				continue
 			} else if req.retry < b.maxRetries {
 				req.retry++
 				b.sendQueue <- req
