@@ -1,7 +1,6 @@
 package telegram
 
 import (
-	"fmt"
 	"log"
 	"strings"
 )
@@ -134,7 +133,7 @@ type Command struct {
 	bot             *Bot
 }
 
-func (c *Command) reply(text string) {
+func (c *Command) Reply(text string) {
 	var err error
 	if c.callbackQueryID != nil {
 		_, err = c.bot.AnswerCallbackQuery(*c.callbackQueryID, &AnswerCallbackQueryOpts{Text: text})
@@ -148,16 +147,6 @@ func (c *Command) reply(text string) {
 		log.Printf("Failed to send reply (%s) to chat %v, message %v: %s\n",
 			text, c.Chat.ID, c.MessageID, err)
 	}
-}
-
-// TextReply replies to the message containing the initial command.
-func (c *Command) TextReply(text string) {
-	c.reply(text)
-}
-
-// ErrorReply replies with an error to the message containing the initial command.
-func (c *Command) ErrorReply(err error) {
-	c.reply(fmt.Sprintf("an error occured: %s", err))
 }
 
 // CommandListener describes a bot command handler.

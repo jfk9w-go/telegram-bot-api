@@ -29,7 +29,7 @@ func main() {
 	// Can be launched in a separate goroutine.
 	bot.Listen(telegram.NewCommandUpdateListener(bot).
 		AddFunc("/greet", func(c *telegram.Command) {
-			c.TextReply("Hello, " + c.User.FirstName)
+			c.Reply("Hello, " + c.User.FirstName)
 		}).
 		AddFunc("/tick", func(c *telegram.Command) {
 			_, err := bot.Send(c.Chat.ID,
@@ -62,43 +62,43 @@ func main() {
 		AddFunc("/count", func(c *telegram.Command) {
 			limit, err := strconv.Atoi(c.Payload)
 			if err != nil {
-				c.ErrorReply(err)
+				c.Reply(err.Error())
 				return
 			}
 
 			if limit <= 0 {
-				c.TextReply("limit must be positive")
+				c.Reply("limit must be positive")
 				return
 			}
 
 			for i := 1; i <= limit; i++ {
-				c.TextReply(strconv.Itoa(i))
+				c.Reply(strconv.Itoa(i))
 			}
 		}).
 		AddFunc("/secret", func(c *telegram.Command) {
 			fields := strings.Fields(c.Payload)
 			if len(fields) != 2 {
-				c.TextReply("usage: /secret Hi 5")
+				c.Reply("usage: /secret Hi 5")
 				return
 			}
 
 			timeoutSecs, err := strconv.Atoi(fields[1])
 			if err != nil {
-				c.ErrorReply(err)
+				c.Reply(err.Error())
 				return
 			}
 
 			timeout := time.Duration(timeoutSecs) * time.Second
 			m, err := bot.Send(c.Chat.ID, &telegram.Text{Text: fields[0]}, nil)
 			if err != nil {
-				c.ErrorReply(err)
+				c.Reply(err.Error())
 				return
 			}
 
 			time.AfterFunc(timeout, func() {
 				ok, err := bot.DeleteMessage(m.Chat.ID, m.ID)
 				if err != nil {
-					c.ErrorReply(err)
+					c.Reply(err.Error())
 					return
 				}
 
@@ -107,7 +107,7 @@ func main() {
 		}).
 		AddFunc("/say", func(c *telegram.Command) {
 			if c.Payload == "" {
-				c.TextReply("please specify a message")
+				c.Reply("please specify a message")
 				return
 			}
 
@@ -120,6 +120,6 @@ func main() {
 			}
 		}).
 		AddFunc("say", func(c *telegram.Command) {
-			c.TextReply(c.Payload)
+			c.Reply(c.Payload)
 		}))
 }
