@@ -84,15 +84,17 @@ func (b *Bot) runSendWorker() {
 				b.sendQueue <- req
 				time.Sleep(floodErr.RetryAfter)
 				continue
-			} else if req.retry < b.maxRetries {
+			}
+
+			if req.retry < b.maxRetries {
 				req.retry++
 				b.sendQueue <- req
 				time.Sleep(time.Duration(math.Pow(2, float64(req.retry))) * time.Second)
 				continue
-			} else {
-				req.err = err
-				req.done <- struct{}{}
 			}
+
+			req.err = err
+			req.done <- struct{}{}
 		} else {
 			req.done <- struct{}{}
 		}
