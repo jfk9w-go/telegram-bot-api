@@ -34,7 +34,7 @@ func main() {
 		AddFunc("/tick", func(c *telegram.Command) {
 			_, err := bot.Send(c.Chat.ID,
 				&telegram.Media{
-					Type:      "photo",
+					Type:      telegram.Photo,
 					Resource:  flu.NewFileSystemResource("tick.png"),
 					Caption:   "Here's a <b>tick</b> for ya.",
 					ParseMode: telegram.HTML,
@@ -48,7 +48,7 @@ func main() {
 			media := make([]telegram.Media, 4)
 			for i := range media {
 				media[i] = telegram.Media{
-					Type:     "photo",
+					Type:     telegram.Photo,
 					Resource: flu.NewFileSystemResource("tick.png"),
 					Caption:  "Image " + strconv.Itoa(i),
 				}

@@ -175,7 +175,7 @@ func (b *Bot) initializeQueue(chat *Chat) {
 
 var emptySendOpts = &SendOpts{}
 
-func (b *Bot) send(chatID ChatID, sendable BaseSendable, opts *SendOpts, resp interface{}) error {
+func (b *Bot) send(chatID ChatID, sendable baseSendable, opts *SendOpts, resp interface{}) error {
 	if opts == nil {
 		opts = emptySendOpts
 	}

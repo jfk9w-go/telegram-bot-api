@@ -8,14 +8,14 @@ import (
 	"github.com/jfk9w-go/flu"
 )
 
-type BaseSendable interface {
+type baseSendable interface {
 	kind() string
 	encode() bool
 	finalize(*flu.FormBody) (flu.BodyWriter, error)
 }
 
 type Sendable interface {
-	BaseSendable
+	baseSendable
 	toSendable() Sendable
 }
 

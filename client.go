@@ -59,14 +59,14 @@ func (c *Client) GetMe() (*User, error) {
 }
 
 // This is an umbrella method used for various /send* API calls.
-// Generally, BaseSendable should be either string or flu.ReadResource.
-// Via values you can specify additional request options.
 // The method is private since callers can hit API limits
 // and get HTTP 429 error in case of intense usage.
 // See
 //   https://core.telegram.org/bots/api#sendmessage
 //   https://core.telegram.org/bots/api#sendphoto
 //   https://core.telegram.org/bots/api#sendvideo
+//   https://core.telegram.org/bots/api#senddocument
+//   https://core.telegram.org/bots/api#sendmediagroup
 func (c *Client) send(url string, body flu.BodyWriter, resp interface{}) error {
 	return c.httpClient.NewRequest().
 		POST().
