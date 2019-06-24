@@ -10,7 +10,6 @@ import (
 
 type baseSendable interface {
 	kind() string
-	encode() bool
 	finalize(*flu.FormBody) (flu.BodyWriter, error)
 }
 
@@ -29,7 +28,7 @@ func (t *Text) kind() string {
 	return "message"
 }
 
-func (t *Text) encode() bool {
+func (t *Text) isMediaGroup() bool {
 	return true
 }
 
@@ -61,10 +60,6 @@ func (m *Media) kind() string {
 	return m.Type
 }
 
-func (m *Media) encode() bool {
-	return true
-}
-
 func (m *Media) finalize(body *flu.FormBody) (flu.BodyWriter, error) {
 	if m.URL != "" {
 		return body.Set(m.Type, m.URL), nil
@@ -88,10 +83,6 @@ type MediaGroup []Media
 
 func (mg MediaGroup) kind() string {
 	return "mediaGroup"
-}
-
-func (mg MediaGroup) encode() bool {
-	return false
 }
 
 func (mg MediaGroup) finalize(body *flu.FormBody) (flu.BodyWriter, error) {

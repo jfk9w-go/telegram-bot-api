@@ -34,7 +34,7 @@ func newClient(httpClient *flu.Client, token string) *Client {
 // Use this method to receive incoming updates using long polling.
 // An Array of Update objects is returned.
 // See https://core.telegram.org/bots/api#getupdates
-func (c *Client) GetUpdates(opts *UpdatesOpts) ([]Update, error) {
+func (c *Client) GetUpdates(opts UpdateOpts) ([]Update, error) {
 	updates := make([]Update, 0)
 	return updates, c.httpClient.NewRequest().
 		POST().

@@ -23,6 +23,15 @@ var SendDelays = map[ChatType]time.Duration{
 	Channel:     0,
 }
 
+type sendRequest struct {
+	url   string
+	body  flu.BodyWriter
+	resp  interface{}
+	err   error
+	retry int
+	done  chan struct{}
+}
+
 // Bot is a Telegram Bot instance.
 // It enhances basic Telegram Bot API client with flood control awareness.
 // All /send* API calls are executed with certain delays to keep them "under the radar".
@@ -31,6 +40,7 @@ var SendDelays = map[ChatType]time.Duration{
 // reacting to them.
 type Bot struct {
 	*Client
+	updateChannel chan Update
 
 	sendQueue   chan *sendRequest
 	maxRetries  int
@@ -39,15 +49,6 @@ type Bot struct {
 	queues map[ChatID]chan *sendRequest
 	mu     *sync.RWMutex
 	wg     *sync.WaitGroup
-}
-
-type sendRequest struct {
-	url   string
-	body  flu.BodyWriter
-	resp  interface{}
-	err   error
-	retry int
-	done  chan struct{}
 }
 
 // NewBot creates a new Bot instance.
@@ -103,24 +104,12 @@ func (b *Bot) runSendWorker() {
 	}
 }
 
-func (b *Bot) runWorker(queue chan *sendRequest, delay time.Duration) {
-	b.wg.Add(1)
-	defer b.wg.Done()
-	for req := range queue {
-		b.sendQueue <- req
-		time.Sleep(delay)
-	}
-}
-
-var uninitializedQueueErr = errors.New("queue not initialized")
-
-// Send is an umbrella method for various /send* API calls.
-// Generally BaseSendable is either string (/sendMessage, media links in /sendPhoto and others)
-// or flu.ReadResource (when sending a local file in /sendPhoto and others).
+// Send is an umbrella method for various /send* API calls which return only one Message.
 // See
 //   https://core.telegram.org/bots/api#sendmessage
 //   https://core.telegram.org/bots/api#sendphoto
 //   https://core.telegram.org/bots/api#sendvideo
+//   https://core.telegram.org/bots/api#senddocument
 func (b *Bot) Send(chatID ChatID, sendable Sendable, opts *SendOpts) (*Message, error) {
 	m := new(Message)
 	err := b.send(chatID, sendable, opts, m)
@@ -132,6 +121,9 @@ func (b *Bot) Send(chatID ChatID, sendable Sendable, opts *SendOpts) (*Message, 
 	return m, err
 }
 
+// Use this method to send a group of photos or videos as an album.
+// On success, an array of the sent Messages is returned.
+// See https://core.telegram.org/bots/api#sendmediagroup
 func (b *Bot) SendMediaGroup(chatID ChatID, media []Media, opts *SendOpts) ([]Message, error) {
 	ms := make([]Message, 0)
 	err := b.send(chatID, MediaGroup(media), opts, &ms)
@@ -175,29 +167,20 @@ func (b *Bot) initializeQueue(chat *Chat) {
 	}
 }
 
-var emptySendOpts = &SendOpts{}
+func (b *Bot) runWorker(queue chan *sendRequest, delay time.Duration) {
+	b.wg.Add(1)
+	defer b.wg.Done()
+	for req := range queue {
+		b.sendQueue <- req
+		time.Sleep(delay)
+	}
+}
+
+var uninitializedQueueErr = errors.New("queue not initialized")
 
 func (b *Bot) send(chatID ChatID, sendable baseSendable, opts *SendOpts, resp interface{}) error {
-	if opts == nil {
-		opts = emptySendOpts
-	}
-
-	var form *flu.FormBody
-	if sendable.encode() {
-		form = flu.Form(sendable)
-	} else {
-		form = flu.Form()
-	}
-
-	form.Set("chat_id", chatID.queryParam())
-	if opts != nil {
-		if err := opts.write(form); err != nil {
-			return errors.Wrap(err, "failed to write SendOpts")
-		}
-	}
-
 	url := b.method("/send" + strings.Title(sendable.kind()))
-	body, err := sendable.finalize(form)
+	body, err := opts.body(chatID, sendable)
 	if err != nil {
 		return errors.Wrap(err, "failed to finalize send data")
 	}
@@ -227,15 +210,15 @@ func (b *Bot) send(chatID ChatID, sendable baseSendable, opts *SendOpts, resp in
 
 // Listen subscribes a listener to incoming updates channel.
 func (b *Bot) Listen(listener UpdateListener) {
-	updateCh := make(chan Update)
-	updatesOpts := &UpdatesOpts{TimeoutSecs: 60, AllowedUpdates: listener.AllowedUpdates()}
-	go b.runUpdatesChan(updateCh, updatesOpts)
-	for update := range updateCh {
+	channel := make(chan Update)
+	opts := UpdateOpts{TimeoutSecs: 60, AllowedUpdates: listener.AllowedUpdates()}
+	go b.runUpdatesChan(channel, opts)
+	for update := range channel {
 		go listener.OnUpdate(update)
 	}
 }
 
-func (b *Bot) runUpdatesChan(updateCh chan<- Update, opts *UpdatesOpts) {
+func (b *Bot) runUpdatesChan(updateCh chan<- Update, opts UpdateOpts) {
 	for {
 		batch, err := b.GetUpdates(opts)
 		if err == nil {

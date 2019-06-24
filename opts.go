@@ -24,9 +24,9 @@ const (
 	MaxCaptionSize = 1024
 )
 
-// UpdatesOpts is /getUpdates request options.
+// UpdateOpts is /getUpdates request options.
 // See https://core.telegram.org/bots/api#getupdates
-type UpdatesOpts struct {
+type UpdateOpts struct {
 	// Identifier of the first update to be returned.
 	// Must be greater by one than the highest among the identifiers of previously received updates.
 	// By default, updates starting with the earliest unconfirmed update are returned.
@@ -44,7 +44,7 @@ type UpdatesOpts struct {
 	AllowedUpdates []string `json:"allowed_updates,omitempty"`
 }
 
-func (o *UpdatesOpts) body() flu.BodyWriter {
+func (o UpdateOpts) body() flu.BodyWriter {
 	return flu.JSON(o)
 }
 
@@ -54,25 +54,36 @@ type SendOpts struct {
 	ReplyMarkup         ReplyMarkup
 }
 
-func (o *SendOpts) write(form *flu.FormBody) error {
-	if o.DisableNotification {
-		form.Set("disable_notification", "1")
+func (o *SendOpts) body(chatID ChatID, sendable baseSendable) (flu.BodyWriter, error) {
+	isMediaGroup := sendable.kind() == "mediaGroup"
+	var form *flu.FormBody
+	if isMediaGroup {
+		form = flu.Form()
+	} else {
+		form = flu.Form(sendable)
 	}
 
-	if o.ReplyToMessageID != 0 {
-		form.Set("reply_to_message_id", o.ReplyToMessageID.queryParam())
-	}
-
-	if o.ReplyMarkup != nil {
-		bytes, err := json.Marshal(o.ReplyMarkup)
-		if err != nil {
-			return errors.Wrap(err, "failed to serialize reply_markup")
+	form.Set("chat_id", chatID.queryParam())
+	if o != nil {
+		if o.DisableNotification {
+			form.Set("disable_notification", "1")
 		}
 
-		form.Set("reply_markup", string(bytes))
+		if o.ReplyToMessageID != 0 {
+			form.Set("reply_to_message_id", o.ReplyToMessageID.queryParam())
+		}
+
+		if !isMediaGroup && o.ReplyMarkup != nil {
+			bytes, err := json.Marshal(o.ReplyMarkup)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to serialize reply_markup")
+			}
+
+			form.Set("reply_markup", string(bytes))
+		}
 	}
 
-	return nil
+	return sendable.finalize(form)
 }
 
 type AnswerCallbackQueryOpts struct {
