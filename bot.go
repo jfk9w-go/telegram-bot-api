@@ -182,7 +182,7 @@ func (b *Bot) send(chatID ChatID, sendable baseSendable, opts *SendOpts, resp in
 	}
 
 	queueExists := false
-	req := &sendRequest{url, body, resp, nil, 0, make(chan struct{}, 1)}
+	req := &sendRequest{url, body, resp, nil, 0, make(chan struct{})}
 
 	b.mu.RLock()
 	if queue, ok := b.queues[chatID]; ok {
