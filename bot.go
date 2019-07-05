@@ -1,15 +1,13 @@
 package telegram
 
 import (
-	"log"
 	"math"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/jfk9w-go/flu"
+	"github.com/pkg/errors"
 )
 
 // GlobalSendDelay is a delay between two consecutive /send* API calls per bot token.
@@ -81,7 +79,6 @@ func (b *Bot) runSendWorker() {
 		err := b.Client.send(req.url, req.body, req.resp)
 		if err != nil {
 			if floodErr, ok := err.(*TooManyMessages); ok {
-				log.Println(strings.Title(err.Error()))
 				b.sendQueue <- req
 				time.Sleep(floodErr.RetryAfter)
 				continue
@@ -162,7 +159,6 @@ func (b *Bot) initializeQueue(chat *Chat) {
 	b.mu.Unlock()
 
 	if ok {
-		log.Println("Created queue for", chat.ID)
 		go b.runWorker(queue, SendDelays[chat.Type])
 	}
 }
@@ -212,31 +208,25 @@ func (b *Bot) send(chatID ChatID, sendable baseSendable, opts *SendOpts, resp in
 func (b *Bot) Listen(listener UpdateListener) {
 	channel := make(chan Update)
 	opts := UpdateOpts{TimeoutSecs: 60, AllowedUpdates: listener.AllowedUpdates()}
-	go b.runUpdatesChan(channel, opts)
+	go b.runUpdateWorker(channel, opts)
 	for update := range channel {
-		go listener.OnUpdate(update)
+		go listener.ReceiveUpdate(update)
 	}
 }
 
-func (b *Bot) runUpdatesChan(updateCh chan<- Update, opts UpdateOpts) {
+func (b *Bot) runUpdateWorker(channel chan<- Update, opts UpdateOpts) {
 	for {
-		batch, err := b.GetUpdates(opts)
+		updates, err := b.GetUpdates(opts)
 		if err == nil {
-			if len(batch) > 0 {
-				log.Printf("Received %d updates", len(batch))
-			}
-
-			for _, update := range batch {
-				updateCh <- update
-				opts.Offset = update.ID.Increment()
+			for _, u := range updates {
+				channel <- u
+				opts.Offset = u.ID.Increment()
 			}
 
 			continue
 		}
 
-		if err != nil {
-			log.Printf("An error occured while polling: %v", err)
-			time.Sleep(time.Minute)
-		}
+		println("poll error: ", err)
+		time.Sleep(time.Minute)
 	}
 }

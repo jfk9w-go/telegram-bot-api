@@ -1,60 +1,62 @@
 package telegram
 
 import (
-	"log"
 	"strings"
 )
 
 // UpdateListener is a handler for incoming Updates.
 type UpdateListener interface {
-	// OnUpdate is called on every received Update.
-	OnUpdate(Update)
+	// ReceiveUpdate is called on every received Update.
+	ReceiveUpdate(Update)
 	// AllowedUpdates_ is the allowed_updates parameter passed
 	// in API calls to /getUpdates or /setWebhook.
 	AllowedUpdates() []string
 }
 
-// CommandUpdateListener is an UpdateListener handling incoming bot commands
+// CommandListener is a UpdateListener handling incoming bot commands
 // with message and edited_message allowed updates.
-type CommandUpdateListener struct {
-	bot       *Bot
-	listeners map[string]CommandListener
+type CommandListener struct {
+	bot      *Bot
+	handlers map[string]CommandHandler
 }
 
-// NewCommandUpdateListener creates a new instance of CommandUpdateListener.
-func NewCommandUpdateListener(bot *Bot) *CommandUpdateListener {
-	return &CommandUpdateListener{bot, make(map[string]CommandListener)}
+// NewCommandListener creates a new instance of CommandListener.
+func NewCommandListener(bot *Bot) *CommandListener {
+	return &CommandListener{bot, make(map[string]CommandHandler)}
 }
 
-// Add binds a CommandListener to a command.
+// Handle binds a CommandHandler to a command.
 // Panics if the binding already exists.
-func (cul *CommandUpdateListener) Add(key string, listener CommandListener) *CommandUpdateListener {
-	if _, ok := cul.listeners[key]; ok {
-		panic("command listener for " + key + " already registered")
+func (l *CommandListener) Handle(key string, handler CommandHandler) *CommandListener {
+	if _, ok := l.handlers[key]; ok {
+		panic("command handler for " + key + " already registered")
 	}
 
-	cul.listeners[key] = listener
-	return cul
+	l.handlers[key] = handler
+	return l
 }
 
-// AddFunc is a shortcut for Add(key, CommandListerFunc(func (*Command) {...}))
-func (cul *CommandUpdateListener) AddFunc(key string, listener CommandListenerFunc) *CommandUpdateListener {
-	return cul.Add(key, listener)
+// HandleFunc is a shortcut for Handle(key, CommandListerFunc(func (*Command) {...}))
+func (l *CommandListener) HandleFunc(key string, handler CommandHandlerFunc) *CommandListener {
+	return l.Handle(key, handler)
 }
 
-func (cul *CommandUpdateListener) OnUpdate(update Update) {
+func (l *CommandListener) ReceiveUpdate(update Update) {
 	cmd := extractCommand(update)
 	if cmd == nil {
 		return
 	}
 
-	cmd.bot = cul.bot
-	if listener, ok := cul.listeners[cmd.Key]; ok {
-		listener.OnCommand(cmd)
+	cmd.bot = l.bot
+	if listener, ok := l.handlers[cmd.Key]; ok {
+		err := listener.HandleCommand(cmd)
+		if err != nil {
+			cmd.Reply(err.Error())
+		}
 	}
 }
 
-func (cul *CommandUpdateListener) AllowedUpdates() []string {
+func (l *CommandListener) AllowedUpdates() []string {
 	return []string{"message", "edited_message", "callback_query"}
 }
 
@@ -144,19 +146,18 @@ func (c *Command) Reply(text string) {
 	}
 
 	if err != nil {
-		log.Printf("Failed to send reply (%s) to chat %v, message %v: %s\n",
-			text, c.Chat.ID, c.MessageID, err)
+		println("reply to ", c.Chat.ID, " error: ", err)
 	}
 }
 
-// CommandListener describes a bot command handler.
-type CommandListener interface {
-	OnCommand(*Command)
+// CommandHandler describes a bot command handler.
+type CommandHandler interface {
+	HandleCommand(*Command) error
 }
 
-// CommandListenerFunc implements CommandListener interface for lambdas.
-type CommandListenerFunc func(*Command)
+// CommandHandlerFunc implements CommandHandler interface for lambdas.
+type CommandHandlerFunc func(*Command) error
 
-func (fcl CommandListenerFunc) OnCommand(cmd *Command) {
-	fcl(cmd)
+func (f CommandHandlerFunc) HandleCommand(cmd *Command) error {
+	return f(cmd)
 }
