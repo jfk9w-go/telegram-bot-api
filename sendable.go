@@ -49,11 +49,11 @@ const (
 )
 
 type Media struct {
-	Type      MediaType              `url:"-" json:"type"`
-	URL       string                 `url:"-" json:"-"`
-	Resource  flu.FileSystemResource `url:"-" json:"-"`
-	Caption   string                 `url:"caption,omitempty" json:"caption,omitempty"`
-	ParseMode ParseMode              `url:"parse_mode,omitempty" json:"parse_mode,omitempty"`
+	Type      MediaType        `url:"-" json:"type"`
+	URL       string           `url:"-" json:"-"`
+	Resource  flu.ReadResource `url:"-" json:"-"`
+	Caption   string           `url:"caption,omitempty" json:"caption,omitempty"`
+	ParseMode ParseMode        `url:"parse_mode,omitempty" json:"parse_mode,omitempty"`
 }
 
 func (m *Media) kind() string {
@@ -63,7 +63,7 @@ func (m *Media) kind() string {
 func (m *Media) finalize(body *flu.FormBody) (flu.BodyWriter, error) {
 	if m.URL != "" {
 		return body.Set(m.Type, m.URL), nil
-	} else if m.Resource != "" {
+	} else if m.Resource != nil {
 		return body.Multipart().Resource(m.Type, m.Resource), nil
 	}
 
@@ -90,7 +90,7 @@ func (mg MediaGroup) finalize(body *flu.FormBody) (flu.BodyWriter, error) {
 	media := make([]wrappedGroupMedia, len(mg))
 	for i, m := range mg {
 		wm := wrappedGroupMedia{m, ""}
-		if m.Resource != "" {
+		if m.Resource != nil {
 			multipart = true
 			id := "media" + strconv.Itoa(i)
 			body.Multipart().Resource(id, m.Resource)
