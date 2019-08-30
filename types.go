@@ -33,12 +33,13 @@ type (
 
 	// See https://core.telegram.org/bots/api#message
 	Message struct {
-		ID       ID              `json:"message_id"`
-		From     User            `json:"from"`
-		Date     int             `json:"date"`
-		Chat     Chat            `json:"chat"`
-		Text     string          `json:"text"`
-		Entities []MessageEntity `json:"entities"`
+		ID             ID              `json:"message_id"`
+		From           User            `json:"from"`
+		Date           int             `json:"date"`
+		Chat           Chat            `json:"chat"`
+		Text           string          `json:"text"`
+		Entities       []MessageEntity `json:"entities"`
+		ReplyToMessage *Message        `json:"reply_to_message"`
 	}
 
 	// See https://core.telegram.org/bots/api#messageentity
