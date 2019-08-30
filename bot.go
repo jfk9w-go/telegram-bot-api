@@ -226,7 +226,7 @@ func (b *Bot) runUpdateWorker(channel chan<- Update, opts UpdateOpts) {
 			continue
 		}
 
-		println("poll error: ", err)
+		println("poll error: ", err.Error())
 		time.Sleep(time.Minute)
 	}
 }
