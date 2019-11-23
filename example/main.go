@@ -75,12 +75,18 @@ func main() {
 		}).
 		HandleFunc("/count", func(tg *telegram.Client, c *telegram.Command) error {
 			limit, err := strconv.Atoi(c.Payload)
-			if err != nil {
-				return err
+			if err == nil {
+				if limit <= 0 {
+					err = errors.New("limit must be positive")
+				}
 			}
 
-			if limit <= 0 {
-				return errors.New("limit must be positive")
+			if err != nil {
+				_, err = tg.Send(c.Chat.ID,
+					&telegram.Text{Text: err.Error()},
+					&telegram.SendOptions{DisableNotification: true})
+
+				return err
 			}
 
 			for i := 1; i <= limit; i++ {
@@ -93,32 +99,45 @@ func main() {
 			return nil
 		}).
 		HandleFunc("/secret", func(tg *telegram.Client, c *telegram.Command) error {
+			var err error
 			fields := strings.Fields(c.Payload)
 			if len(fields) != 2 {
-				return errors.New("usage: /secret Hi 5")
+				err = errors.New("usage: /secret Hi 5")
 			}
 
-			timeoutSecs, err := strconv.Atoi(fields[1])
+			var timeout time.Duration
+			if err == nil {
+				var secs int
+				secs, err = strconv.Atoi(fields[0])
+				if err == nil {
+					if secs <= 0 {
+						err = errors.New("secs must be positive")
+					} else {
+						timeout = time.Duration(secs) * time.Second
+					}
+				}
+			}
+
 			if err != nil {
+				_, err := tg.Send(c.Chat.ID,
+					&telegram.Text{Text: err.Error()},
+					&telegram.SendOptions{ReplyToMessageID: c.MessageID})
+
 				return err
 			}
 
-			timeout := time.Duration(timeoutSecs) * time.Second
 			m, err := tg.Send(c.Chat.ID, &telegram.Text{Text: fields[0]}, nil)
 			if err != nil {
 				return err
 			}
 
-			time.AfterFunc(timeout, func() {
-				ok, err := tg.DeleteMessage(m.Chat.ID, m.ID)
-				if err != nil {
-					log.Printf("An error occurred message %v deletion: %v", m.ID, err)
-				} else {
-					log.Printf("Message deleted: %v", ok)
-				}
-			})
+			// launching in a separate thread anyway
+			// we don't expect that much of a load
+			time.Sleep(timeout)
 
-			return nil
+			ok, err := tg.DeleteMessage(m.Chat.ID, m.ID)
+			log.Printf("Message deleted: %v", ok)
+			return err
 		}).
 		HandleFunc("/say", func(tg *telegram.Client, c *telegram.Command) error {
 			if c.Payload == "" {
