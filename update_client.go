@@ -32,14 +32,14 @@ func (o *GetUpdatesOptions) body() flu.BodyWriter {
 }
 
 type updateClient struct {
-	*Client
+	*sendClient
 	options *GetUpdatesOptions
 }
 
-func newUpdateClient(send *Client, options *GetUpdatesOptions) *updateClient {
+func newUpdateClient(send *sendClient, options *GetUpdatesOptions) *updateClient {
 	return &updateClient{
-		Client:  send,
-		options: options,
+		sendClient: send,
+		options:    options,
 	}
 }
 
@@ -50,7 +50,7 @@ func (c *updateClient) Listen(listener UpdateListener) {
 		updates, err := c.GetUpdates(c.options)
 		if err == nil {
 			for _, update := range updates {
-				go listener.ReceiveUpdate(c.Client, update)
+				go listener.ReceiveUpdate(c.sendClient, update)
 				c.options.Offset = update.ID.Increment()
 			}
 

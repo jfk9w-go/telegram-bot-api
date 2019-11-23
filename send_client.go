@@ -35,7 +35,7 @@ func (t *sendTask) wait() {
 
 type sendQueue = chan *sendTask
 
-type Client struct {
+type sendClient struct {
 	*client
 	maxRetries int
 	gateway    sendQueue
@@ -45,22 +45,22 @@ type Client struct {
 	once       *sync.Once
 }
 
-func newSendClient(client *client, maxRetries int) *Client {
-	return &Client{
+func newSendClient(client *client, maxRetries int) *sendClient {
+	return &sendClient{
 		client:     client,
 		maxRetries: maxRetries,
 		once:       new(sync.Once),
 	}
 }
 
-func (c *Client) init() {
+func (c *sendClient) init() {
 	c.gateway = make(sendQueue, 1000)
 	c.recipients = make(map[ChatID]sendQueue)
 	go c.runGateway()
 	log.Printf("Initialized send client")
 }
 
-func (c *Client) runGateway() {
+func (c *sendClient) runGateway() {
 	c.workers.Add(1)
 	defer c.workers.Done()
 	for task := range c.gateway {
@@ -93,7 +93,7 @@ func (c *Client) runGateway() {
 	}
 }
 
-func (c *Client) runWorker(queue sendQueue, delay time.Duration) {
+func (c *sendClient) runWorker(queue sendQueue, delay time.Duration) {
 	c.workers.Add(1)
 	defer c.workers.Done()
 	for t := range queue {
@@ -104,7 +104,7 @@ func (c *Client) runWorker(queue sendQueue, delay time.Duration) {
 
 var recipientErr = errors.New("unknown recipient")
 
-func (c *Client) submitAndWait(chatID ChatID, item genericSendItem, options *SendOptions, resp interface{}) error {
+func (c *sendClient) submitAndWait(chatID ChatID, item genericSendItem, options *SendOptions, resp interface{}) error {
 	c.once.Do(c.init)
 	url := c.method("/send" + strings.Title(item.kind()))
 	body, err := options.body(chatID, item)
@@ -135,7 +135,7 @@ func (c *Client) submitAndWait(chatID ChatID, item genericSendItem, options *Sen
 	return task.err
 }
 
-func (c *Client) newRecipient(chat *Chat) {
+func (c *sendClient) newRecipient(chat *Chat) {
 	hasUsername := chat.Username != nil
 	var queue sendQueue = nil
 
@@ -172,7 +172,7 @@ func (c *Client) newRecipient(chat *Chat) {
 //   https://core.telegram.org/bots/api#sendphoto
 //   https://core.telegram.org/bots/api#sendvideo
 //   https://core.telegram.org/bots/api#senddocument
-func (c *Client) Send(chatID ChatID, item SendItem, options *SendOptions) (*Message, error) {
+func (c *sendClient) Send(chatID ChatID, item SendItem, options *SendOptions) (*Message, error) {
 	m := new(Message)
 	err := c.submitAndWait(chatID, item, options, m)
 	if err == recipientErr {
@@ -186,7 +186,7 @@ func (c *Client) Send(chatID ChatID, item SendItem, options *SendOptions) (*Mess
 // Use this method to send a group of photos or videos as an album.
 // On success, an array of the workers Messages is returned.
 // See https://core.telegram.org/bots/api#sendmediagroup
-func (c *Client) SendMediaGroup(chatID ChatID, media []Media, options *SendOptions) ([]Message, error) {
+func (c *sendClient) SendMediaGroup(chatID ChatID, media []Media, options *SendOptions) ([]Message, error) {
 	ms := make([]Message, 0)
 	err := c.submitAndWait(chatID, MediaGroup(media), options, &ms)
 	if err == recipientErr {

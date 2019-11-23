@@ -5,10 +5,12 @@ import (
 	"strings"
 )
 
+type Client = *sendClient
+
 // UpdateListener is a handler for incoming Updates.
 type UpdateListener interface {
 	// ReceiveUpdate is called on every received Update.
-	ReceiveUpdate(*Client, Update)
+	ReceiveUpdate(Client, Update)
 	// AllowedUpdates_ is the allowed_updates parameter passed
 	// in API calls to /getUpdates or /setWebhook.
 	AllowedUpdates() []string
@@ -36,12 +38,12 @@ func (l *CommandListener) Handle(key string, handler CommandHandler) *CommandLis
 	return l
 }
 
-// HandleFunc is a shortcut for Handle(key, CommandListerFunc(func (*Client, *Command) {...}))
+// HandleFunc is a shortcut for Handle(key, CommandListerFunc(func (*sendClient, *Command) {...}))
 func (l *CommandListener) HandleFunc(key string, handler CommandHandlerFunc) *CommandListener {
 	return l.Handle(key, handler)
 }
 
-func (l *CommandListener) ReceiveUpdate(c *Client, update Update) {
+func (l *CommandListener) ReceiveUpdate(c Client, update Update) {
 	cmd := extractCommand(update)
 	if cmd == nil {
 		return
@@ -134,12 +136,12 @@ type Command struct {
 
 // CommandHandler describes a bot command handler.
 type CommandHandler interface {
-	HandleCommand(*Client, *Command) error
+	HandleCommand(Client, *Command) error
 }
 
 // CommandHandlerFunc implements CommandHandler interface for lambdas.
-type CommandHandlerFunc func(tg *Client, cmd *Command) error
+type CommandHandlerFunc func(tg Client, cmd *Command) error
 
-func (f CommandHandlerFunc) HandleCommand(c *Client, cmd *Command) error {
+func (f CommandHandlerFunc) HandleCommand(c Client, cmd *Command) error {
 	return f(c, cmd)
 }

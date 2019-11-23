@@ -43,14 +43,14 @@ func main() {
 	// Listen to the commands. Blocks until Bot.Close() is called.
 	// Can be launched in a separate goroutine.
 	bot.Listen(telegram.NewCommandListener().
-		HandleFunc("/greet", func(tg *telegram.Client, c *telegram.Command) error {
+		HandleFunc("/greet", func(tg telegram.Client, c *telegram.Command) error {
 			_, err := tg.Send(c.Chat.ID,
 				&telegram.Text{Text: "Hello, " + c.User.FirstName},
 				&telegram.SendOptions{ReplyToMessageID: c.MessageID})
 
 			return err
 		}).
-		HandleFunc("/tick", func(tg *telegram.Client, c *telegram.Command) error {
+		HandleFunc("/tick", func(tg telegram.Client, c *telegram.Command) error {
 			_, err := tg.Send(c.Chat.ID,
 				&telegram.Media{
 					Type:      telegram.Photo,
@@ -61,7 +61,7 @@ func main() {
 
 			return err
 		}).
-		HandleFunc("/ticks", func(tg *telegram.Client, c *telegram.Command) error {
+		HandleFunc("/ticks", func(tg telegram.Client, c *telegram.Command) error {
 			media := make([]telegram.Media, 4)
 			for i := range media {
 				media[i] = telegram.Media{
@@ -73,7 +73,7 @@ func main() {
 			_, err := tg.SendMediaGroup(c.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
 			return err
 		}).
-		HandleFunc("/count", func(tg *telegram.Client, c *telegram.Command) error {
+		HandleFunc("/count", func(tg telegram.Client, c *telegram.Command) error {
 			limit, err := strconv.Atoi(c.Payload)
 			if err == nil {
 				if limit <= 0 {
@@ -98,7 +98,7 @@ func main() {
 
 			return nil
 		}).
-		HandleFunc("/secret", func(tg *telegram.Client, c *telegram.Command) error {
+		HandleFunc("/secret", func(tg telegram.Client, c *telegram.Command) error {
 			var err error
 			fields := strings.Fields(c.Payload)
 			if len(fields) != 2 {
@@ -131,7 +131,7 @@ func main() {
 				return err
 			}
 
-			// launching in a separate thread anyway
+			// executing in a separate goroutine anyway
 			// we don't expect that much of a load
 			time.Sleep(timeout)
 
@@ -139,7 +139,7 @@ func main() {
 			log.Printf("Message deleted: %v", ok)
 			return err
 		}).
-		HandleFunc("/say", func(tg *telegram.Client, c *telegram.Command) error {
+		HandleFunc("/say", func(tg telegram.Client, c *telegram.Command) error {
 			if c.Payload == "" {
 				_, err := tg.Send(c.Chat.ID,
 					&telegram.Text{Text: "Please specify a message"},
@@ -154,7 +154,7 @@ func main() {
 
 			return err
 		}).
-		HandleFunc("say", func(tg *telegram.Client, c *telegram.Command) error {
+		HandleFunc("say", func(tg telegram.Client, c *telegram.Command) error {
 			if c.CallbackQueryID == "" {
 				return errors.New("callback query ID is nil")
 			}
