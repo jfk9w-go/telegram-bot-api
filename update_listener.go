@@ -1,13 +1,14 @@
 package telegram
 
 import (
+	"log"
 	"strings"
 )
 
 // UpdateListener is a handler for incoming Updates.
 type UpdateListener interface {
 	// ReceiveUpdate is called on every received Update.
-	ReceiveUpdate(Update)
+	ReceiveUpdate(*Client, Update)
 	// AllowedUpdates_ is the allowed_updates parameter passed
 	// in API calls to /getUpdates or /setWebhook.
 	AllowedUpdates() []string
@@ -16,13 +17,12 @@ type UpdateListener interface {
 // CommandListener is a UpdateListener handling incoming bot commands
 // with message and edited_message allowed updates.
 type CommandListener struct {
-	bot      *Bot
 	handlers map[string]CommandHandler
 }
 
 // NewCommandListener creates a new instance of CommandListener.
-func NewCommandListener(bot *Bot) *CommandListener {
-	return &CommandListener{bot, make(map[string]CommandHandler)}
+func NewCommandListener() *CommandListener {
+	return &CommandListener{make(map[string]CommandHandler)}
 }
 
 // Handle binds a CommandHandler to a command.
@@ -36,22 +36,21 @@ func (l *CommandListener) Handle(key string, handler CommandHandler) *CommandLis
 	return l
 }
 
-// HandleFunc is a shortcut for Handle(key, CommandListerFunc(func (*Command) {...}))
+// HandleFunc is a shortcut for Handle(key, CommandListerFunc(func (*Client, *Command) {...}))
 func (l *CommandListener) HandleFunc(key string, handler CommandHandlerFunc) *CommandListener {
 	return l.Handle(key, handler)
 }
 
-func (l *CommandListener) ReceiveUpdate(update Update) {
+func (l *CommandListener) ReceiveUpdate(c *Client, update Update) {
 	cmd := extractCommand(update)
 	if cmd == nil {
 		return
 	}
 
-	cmd.bot = l.bot
 	if listener, ok := l.handlers[cmd.Key]; ok {
-		err := listener.HandleCommand(cmd)
+		err := listener.HandleCommand(c, cmd)
 		if err != nil {
-			cmd.Reply(err.Error())
+			log.Printf("An error occurred while processing %v: %v", update, err)
 		}
 	}
 }
@@ -89,20 +88,20 @@ func extractCommandMessage(message *Message) *Command {
 	return nil
 }
 
-func extractCommandCallbackQuery(callbackQuery *CallbackQuery) *Command {
-	if callbackQuery.Data == nil {
+func extractCommandCallbackQuery(query *CallbackQuery) *Command {
+	if query.Data == nil {
 		return nil
 	}
 
-	for i, c := range *callbackQuery.Data {
-		if c == ':' && len(*callbackQuery.Data) > i+1 {
+	for i, c := range *query.Data {
+		if c == ':' && len(*query.Data) > i+1 {
 			return &Command{
-				Chat:            &callbackQuery.Message.Chat,
-				User:            &callbackQuery.From,
-				MessageID:       callbackQuery.Message.ID,
-				Key:             (*callbackQuery.Data)[:i],
-				Payload:         (*callbackQuery.Data)[i+1:],
-				callbackQueryID: &callbackQuery.ID,
+				Chat:            &query.Message.Chat,
+				User:            &query.From,
+				MessageID:       query.Message.ID,
+				Key:             (*query.Data)[:i],
+				Payload:         (*query.Data)[i+1:],
+				CallbackQueryID: query.ID,
 			}
 		}
 	}
@@ -125,39 +124,22 @@ func CommandButton(text, key, data string) ReplyMarkup {
 
 // Command is a text bot command.
 type Command struct {
-	Chat      *Chat
-	User      *User
-	MessageID ID
-	Key       string
-	Payload   string
-
-	callbackQueryID *string
-	bot             *Bot
-}
-
-func (c *Command) Reply(text string) {
-	var err error
-	if c.callbackQueryID != nil {
-		_, err = c.bot.AnswerCallbackQuery(*c.callbackQueryID, &AnswerCallbackQueryOpts{Text: text})
-	} else if text != "" {
-		_, err = c.bot.Send(c.Chat.ID,
-			&Text{Text: text, DisableWebPagePreview: true},
-			&SendOpts{DisableNotification: true, ReplyToMessageID: c.MessageID})
-	}
-
-	if err != nil {
-		println("reply to ", c.Chat.ID, " error: ", err)
-	}
+	Chat            *Chat
+	User            *User
+	MessageID       ID
+	Key             string
+	Payload         string
+	CallbackQueryID string
 }
 
 // CommandHandler describes a bot command handler.
 type CommandHandler interface {
-	HandleCommand(*Command) error
+	HandleCommand(*Client, *Command) error
 }
 
 // CommandHandlerFunc implements CommandHandler interface for lambdas.
-type CommandHandlerFunc func(*Command) error
+type CommandHandlerFunc func(tg *Client, cmd *Command) error
 
-func (f CommandHandlerFunc) HandleCommand(cmd *Command) error {
-	return f(cmd)
+func (f CommandHandlerFunc) HandleCommand(c *Client, cmd *Command) error {
+	return f(c, cmd)
 }

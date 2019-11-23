@@ -2,20 +2,20 @@ package telegram
 
 import (
 	"encoding/json"
-	"errors"
 	"strconv"
 
 	"github.com/jfk9w-go/flu"
+	"github.com/pkg/errors"
 )
 
-type baseSendable interface {
+type genericSendItem interface {
 	kind() string
-	finalize(*flu.FormBody) (flu.BodyWriter, error)
+	write(*flu.FormBody) (flu.BodyWriter, error)
 }
 
-type Sendable interface {
-	baseSendable
-	toSendable() Sendable
+type SendItem interface {
+	genericSendItem
+	self() SendItem
 }
 
 type Text struct {
@@ -28,15 +28,11 @@ func (t *Text) kind() string {
 	return "message"
 }
 
-func (t *Text) isMediaGroup() bool {
-	return true
-}
-
-func (t *Text) finalize(body *flu.FormBody) (flu.BodyWriter, error) {
+func (t *Text) write(body *flu.FormBody) (flu.BodyWriter, error) {
 	return body, nil
 }
 
-func (t *Text) toSendable() Sendable {
+func (t *Text) self() SendItem {
 	return t
 }
 
@@ -60,7 +56,7 @@ func (m *Media) kind() string {
 	return m.Type
 }
 
-func (m *Media) finalize(body *flu.FormBody) (flu.BodyWriter, error) {
+func (m *Media) write(body *flu.FormBody) (flu.BodyWriter, error) {
 	if m.URL != "" {
 		return body.Set(m.Type, m.URL), nil
 	} else if m.Resource != nil {
@@ -70,11 +66,11 @@ func (m *Media) finalize(body *flu.FormBody) (flu.BodyWriter, error) {
 	return nil, errors.New("no URL or resource specified")
 }
 
-func (m *Media) toSendable() Sendable {
+func (m *Media) self() SendItem {
 	return m
 }
 
-type wrappedGroupMedia struct {
+type mediaJSON struct {
 	Media
 	MediaURL string `json:"media"`
 }
@@ -85,23 +81,23 @@ func (mg MediaGroup) kind() string {
 	return "mediaGroup"
 }
 
-func (mg MediaGroup) finalize(body *flu.FormBody) (flu.BodyWriter, error) {
+func (mg MediaGroup) write(body *flu.FormBody) (flu.BodyWriter, error) {
 	multipart := true
-	media := make([]wrappedGroupMedia, len(mg))
+	media := make([]mediaJSON, len(mg))
 	for i, m := range mg {
-		wm := wrappedGroupMedia{m, ""}
+		m := mediaJSON{m, ""}
 		if m.Resource != nil {
 			multipart = true
 			id := "media" + strconv.Itoa(i)
 			body.Multipart().Resource(id, m.Resource)
-			wm.MediaURL = "attach://" + id
+			m.MediaURL = "attach://" + id
 		} else if m.URL != "" {
-			wm.MediaURL = m.URL
+			m.MediaURL = m.URL
 		} else {
 			return nil, errors.New("no URL or resource specified")
 		}
 
-		media[i] = wm
+		media[i] = m
 	}
 
 	bytes, err := json.Marshal(media)

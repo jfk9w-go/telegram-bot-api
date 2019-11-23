@@ -1,6 +1,23 @@
 package telegram
 
-// Type of chat, can be either “private”, “group”, “supergroup” or “channel”
+// ParseMode is a parse_mode request parameter type.
+type ParseMode string
+
+const (
+	// None is used for empty parse_mode.
+	None ParseMode = ""
+	// Markdown is "Markdown" parse_mode value.
+	Markdown ParseMode = "Markdown"
+	// HTML is "HTML" parse_mode value.
+	HTML ParseMode = "HTML"
+
+	// MaxMessageSize is maximum message character length.
+	MaxMessageSize = 4096
+	// MaxCaptionSize is maximum caption character length.
+	MaxCaptionSize = 1024
+)
+
+// Type of chat, can be either “private”, “group”, “supergroup” or “updateChannel”
 type ChatType string
 
 const (
@@ -88,7 +105,7 @@ type (
 	}
 
 	ReplyMarkup interface {
-		replyMarkup() ReplyMarkup
+		self() ReplyMarkup
 	}
 
 	// https://core.telegram.org/bots/api#inlinekeyboardmarkup
@@ -97,6 +114,6 @@ type (
 	}
 )
 
-func (m InlineKeyboardMarkup) replyMarkup() ReplyMarkup {
+func (m InlineKeyboardMarkup) self() ReplyMarkup {
 	return m
 }

@@ -2,44 +2,48 @@ package telegram
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
 
 	"github.com/jfk9w-go/flu"
+	"github.com/pkg/errors"
 )
 
-// Client is the Telegram Bot API client implementation.
+// client is the Telegram Bot API client implementation.
 // It can not be instantiated by package users.
 // Instead, it should be used as part of Bot.
-type Client struct {
-	httpClient *flu.Client
-	baseURI    string
+type client struct {
+	http    *flu.Client
+	baseURI string
 }
 
-func newClient(httpClient *flu.Client, token string) *Client {
-	if httpClient == nil {
-		httpClient = flu.NewTransport().
+func newClient(http *flu.Client, token string) *client {
+	if token == "" {
+		panic("token must not be empty")
+	}
+
+	if http == nil {
+		http = flu.NewTransport().
 			ResponseHeaderTimeout(2 * time.Minute).
 			NewClient()
 	}
 
-	return &Client{
-		httpClient: httpClient,
-		baseURI:    "https://api.telegram.org/bot" + token,
+	return &client{
+		http:    http,
+		baseURI: "https://api.telegram.org/bot" + token,
 	}
 }
 
 // Use this method to receive incoming updates using long polling.
 // An Array of Update objects is returned.
 // See https://core.telegram.org/bots/api#getupdates
-func (c *Client) GetUpdates(opts UpdateOpts) ([]Update, error) {
+func (c *client) GetUpdates(options *GetUpdatesOptions) ([]Update, error) {
 	updates := make([]Update, 0)
-	return updates, c.httpClient.NewRequest().
+	return updates, c.http.NewRequest().
 		POST().
 		Resource(c.method("/getUpdates")).
-		Body(opts.body()).
+		Body(options.body()).
 		Send().
 		ReadResponseFunc(readResponse(&updates)).
 		Error
@@ -48,9 +52,9 @@ func (c *Client) GetUpdates(opts UpdateOpts) ([]Update, error) {
 // A simple method for testing your bot's auth token. Requires no parameters.
 // Returns basic information about the bot in form of a User object.
 // See https://core.telegram.org/bots/api#getme
-func (c *Client) GetMe() (*User, error) {
+func (c *client) GetMe() (*User, error) {
 	user := new(User)
-	return user, c.httpClient.NewRequest().
+	return user, c.http.NewRequest().
 		GET().
 		Resource(c.method("/getMe")).
 		Send().
@@ -67,8 +71,8 @@ func (c *Client) GetMe() (*User, error) {
 //   https://core.telegram.org/bots/api#sendvideo
 //   https://core.telegram.org/bots/api#senddocument
 //   https://core.telegram.org/bots/api#sendmediagroup
-func (c *Client) send(url string, body flu.BodyWriter, resp interface{}) error {
-	return c.httpClient.NewRequest().
+func (c *client) send(url string, body flu.BodyWriter, resp interface{}) error {
+	return c.http.NewRequest().
 		POST().
 		Resource(url).
 		Body(body).
@@ -78,17 +82,17 @@ func (c *Client) send(url string, body flu.BodyWriter, resp interface{}) error {
 }
 
 // Use this method to delete a message, including service messages, with the following limitations:
-//- A message can only be deleted if it was sent less than 48 hours ago.
+//- A message can only be deleted if it was workers less than 48 hours ago.
 //- Bots can delete outgoing messages in private chats, groups, and supergroups.
 //- Bots granted can_post_messages permissions can delete outgoing messages in channels.
 //- If the bot is an administrator of a group, it can delete any message there.
-//- If the bot has can_delete_messages permission in a supergroup or a channel, it can delete any message there.
+//- If the bot has can_delete_messages permission in a supergroup or a updateChannel, it can delete any message there.
 // Returns True on success.
 // See
 //    https://core.telegram.org/bots/api#deletemessage
-func (c *Client) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
+func (c *client) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 	var r bool
-	return r, c.httpClient.NewRequest().
+	return r, c.http.NewRequest().
 		GET().
 		Resource(c.method("/deleteMessage")).
 		QueryParam("chat_id", chatID.queryParam()).
@@ -99,12 +103,12 @@ func (c *Client) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 }
 
 // Use this method to get up to date information about the chat (current name of
-// the user for one-on-one conversations, current username of a user, group or channel, etc.).
+// the user for one-on-one conversations, current username of a user, group or updateChannel, etc.).
 // Returns a Chat object on success.
 // See https://core.telegram.org/bots/api#getchat
-func (c *Client) GetChat(chatID ChatID) (*Chat, error) {
+func (c *client) GetChat(chatID ChatID) (*Chat, error) {
 	chat := new(Chat)
-	return chat, c.httpClient.NewRequest().
+	return chat, c.http.NewRequest().
 		GET().
 		Resource(c.method("/getChat")).
 		QueryParam("chat_id", chatID.queryParam()).
@@ -118,9 +122,9 @@ func (c *Client) GetChat(chatID ChatID) (*Chat, error) {
 // all chat administrators except other bots. If the chat is a group or a supergroup and
 // no administrators were appointed, only the creator will be returned.
 // See https://core.telegram.org/bots/api#getchatadministrators
-func (c *Client) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
+func (c *client) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 	members := make([]ChatMember, 0)
-	return members, c.httpClient.NewRequest().
+	return members, c.http.NewRequest().
 		GET().
 		Resource(c.method("/getChatAdministrators")).
 		QueryParam("chat_id", chatID.queryParam()).
@@ -132,9 +136,9 @@ func (c *Client) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 // Use this method to get information about a member of a chat.
 // Returns a ChatMember object on success.
 // See https://core.telegram.org/bots/api#getchatmember
-func (c *Client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
+func (c *client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 	member := new(ChatMember)
-	return member, c.httpClient.NewRequest().
+	return member, c.http.NewRequest().
 		GET().
 		Resource(c.method("/getChatMember")).
 		QueryParam("chat_id", chatID.queryParam()).
@@ -144,29 +148,29 @@ func (c *Client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 		Error
 }
 
-// Use this method to send answers to callback queries sent from inline keyboards.
+// Use this method to send answers to callback queries workers from inline keyboards.
 // The answer will be displayed to the user as a notification at the top of the chat screen or as an alert.
 // On success, True is returned.
 // https://core.telegram.org/bots/api#answercallbackquery
-func (c *Client) AnswerCallbackQuery(id string, opts *AnswerCallbackQueryOpts) (bool, error) {
+func (c *client) AnswerCallbackQuery(id string, options *AnswerCallbackQueryOptions) (bool, error) {
 	var r bool
-	return r, c.httpClient.NewRequest().
+	return r, c.http.NewRequest().
 		POST().
 		Resource(c.method("/answerCallbackQuery")).
-		Body(opts.body(id)).
+		Body(options.body(id)).
 		Send().
 		ReadResponseFunc(readResponse(&r)).
 		Error
 }
 
-func (c *Client) method(method string) string {
+func (c *client) method(method string) string {
 	return c.baseURI + method
 }
 
 func readResponse(value interface{}) flu.ReadResponseFunc {
 	return func(resp *http.Response) error {
 		if _, ok := allowedStatusCodes[resp.StatusCode]; !ok {
-			return fmt.Errorf("invalid status code: %d", resp.StatusCode)
+			return errors.Errorf("invalid status code: %d", resp.StatusCode)
 		}
 
 		data, err := ioutil.ReadAll(resp.Body)

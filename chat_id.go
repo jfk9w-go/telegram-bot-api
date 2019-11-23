@@ -51,7 +51,7 @@ func (username Username) String() string {
 	return string(username)
 }
 
-// ChatID is either an ID or channel Username in various API calls.
+// ChatID is either an ID or updateChannel Username in various API calls.
 type ChatID interface {
 	queryParam() string
 }
