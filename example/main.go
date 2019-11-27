@@ -54,7 +54,7 @@ func main() {
 			_, err := tg.Send(c.Chat.ID,
 				&telegram.Media{
 					Type:      telegram.Photo,
-					Resource:  flu.NewFileSystemResource("tick.png"),
+					Resource:  flu.File("tick.png"),
 					Caption:   "Here's a <b>tick</b> for ya.",
 					ParseMode: telegram.HTML},
 				&telegram.SendOptions{DisableNotification: true})
@@ -66,7 +66,7 @@ func main() {
 			for i := range media {
 				media[i] = telegram.Media{
 					Type:     telegram.Photo,
-					Resource: flu.NewFileSystemResource("tick.png"),
+					Resource: flu.File("tick.png"),
 					Caption:  "Image " + strconv.Itoa(i)}
 			}
 
@@ -108,7 +108,7 @@ func main() {
 			var timeout time.Duration
 			if err == nil {
 				var secs int
-				secs, err = strconv.Atoi(fields[0])
+				secs, err = strconv.Atoi(fields[1])
 				if err == nil {
 					if secs <= 0 {
 						err = errors.New("secs must be positive")

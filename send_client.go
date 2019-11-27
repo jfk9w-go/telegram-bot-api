@@ -12,14 +12,14 @@ import (
 
 type sendTask struct {
 	url   string
-	body  flu.BodyWriter
+	body  flu.BodyEncoderTo
 	resp  interface{}
 	err   error
 	retry int
 	work  sync.WaitGroup
 }
 
-func newSendTask(url string, body flu.BodyWriter, resp interface{}) *sendTask {
+func newSendTask(url string, body flu.BodyEncoderTo, resp interface{}) *sendTask {
 	t := &sendTask{url: url, body: body, resp: resp}
 	t.work.Add(1)
 	return t
@@ -69,7 +69,6 @@ func (c *sendClient) runGateway() {
 			err := c.send(task.url, task.body, task.resp)
 			switch err := err.(type) {
 			case nil:
-				task.complete()
 				break taskloop
 
 			case *TooManyMessages:
@@ -81,7 +80,6 @@ func (c *sendClient) runGateway() {
 				task.retry++
 				if task.retry > c.maxRetries {
 					task.err = err
-					task.complete()
 					break taskloop
 				} else {
 					time.Sleep(GatewaySendDelay)
@@ -89,6 +87,7 @@ func (c *sendClient) runGateway() {
 			}
 		}
 
+		task.complete()
 		time.Sleep(GatewaySendDelay)
 	}
 }
@@ -104,7 +103,7 @@ func (c *sendClient) runWorker(queue sendQueue, delay time.Duration) {
 
 var recipientErr = errors.New("unknown recipient")
 
-func (c *sendClient) submitAndWait(chatID ChatID, item genericSendItem, options *SendOptions, resp interface{}) error {
+func (c *sendClient) submitAndWait(chatID ChatID, item sendable, options *SendOptions, resp interface{}) error {
 	c.once.Do(c.init)
 	url := c.method("/send" + strings.Title(item.kind()))
 	body, err := options.body(chatID, item)
@@ -172,7 +171,7 @@ func (c *sendClient) newRecipient(chat *Chat) {
 //   https://core.telegram.org/bots/api#sendphoto
 //   https://core.telegram.org/bots/api#sendvideo
 //   https://core.telegram.org/bots/api#senddocument
-func (c *sendClient) Send(chatID ChatID, item SendItem, options *SendOptions) (*Message, error) {
+func (c *sendClient) Send(chatID ChatID, item Sendable, options *SendOptions) (*Message, error) {
 	m := new(Message)
 	err := c.submitAndWait(chatID, item, options, m)
 	if err == recipientErr {

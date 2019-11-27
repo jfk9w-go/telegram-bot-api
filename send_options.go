@@ -25,13 +25,13 @@ type SendOptions struct {
 	ReplyMarkup         ReplyMarkup
 }
 
-func (o *SendOptions) body(chatID ChatID, item genericSendItem) (flu.BodyWriter, error) {
+func (o *SendOptions) body(chatID ChatID, item sendable) (flu.BodyEncoderTo, error) {
 	isMediaGroup := item.kind() == "mediaGroup"
-	var form *flu.FormBody
+	var form flu.Form
 	if isMediaGroup {
-		form = flu.Form()
+		form = flu.EmptyForm(true)
 	} else {
-		form = flu.Form(item)
+		form = flu.FormValue(item, true)
 	}
 
 	form.Set("chat_id", chatID.queryParam())
@@ -54,5 +54,5 @@ func (o *SendOptions) body(chatID ChatID, item genericSendItem) (flu.BodyWriter,
 		}
 	}
 
-	return item.write(form)
+	return item.body(form)
 }

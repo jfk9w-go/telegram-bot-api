@@ -1,9 +1,11 @@
 package telegram
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 	"time"
+
+	"github.com/jfk9w-go/flu"
 )
 
 // responseParameters contains information about why a request was unsuccessful.
@@ -19,11 +21,22 @@ type response struct {
 	Ok          bool                `json:"ok"`
 	ErrorCode   int                 `json:"error_code"`
 	Description string              `json:"description"`
-	Result      json.RawMessage     `json:"result"`
+	Result      interface{}         `json:"result"`
 	Parameters  *responseParameters `json:"parameters"`
 }
 
-func (r *response) parse(value interface{}) error {
+func newResponse(value interface{}) *response {
+	return &response{
+		Result: value,
+	}
+}
+
+func (r *response) DecodeFrom(reader io.Reader) error {
+	err := flu.JSON(r).DecodeFrom(reader)
+	if err != nil {
+		return err
+	}
+
 	if !r.Ok {
 		if r.Parameters != nil && r.Parameters.RetryAfter > 0 {
 			return &TooManyMessages{time.Duration(r.Parameters.RetryAfter) * time.Second}
@@ -32,16 +45,7 @@ func (r *response) parse(value interface{}) error {
 		return &Error{r.ErrorCode, r.Description}
 	}
 
-	if value == nil {
-		return nil
-	}
-
-	data, err := r.Result.MarshalJSON()
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, value)
+	return nil
 }
 
 // Error is an error returned by Telegram Bot API.

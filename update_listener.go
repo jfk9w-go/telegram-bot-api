@@ -1,8 +1,9 @@
 package telegram
 
 import (
-	"log"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 type Client = *sendClient
@@ -10,7 +11,7 @@ type Client = *sendClient
 // UpdateListener is a handler for incoming Updates.
 type UpdateListener interface {
 	// ReceiveUpdate is called on every received Update.
-	ReceiveUpdate(Client, Update)
+	ReceiveUpdate(Client, Update) error
 	// AllowedUpdates_ is the allowed_updates parameter passed
 	// in API calls to /getUpdates or /setWebhook.
 	AllowedUpdates() []string
@@ -43,18 +44,20 @@ func (l *CommandListener) HandleFunc(key string, handler CommandHandlerFunc) *Co
 	return l.Handle(key, handler)
 }
 
-func (l *CommandListener) ReceiveUpdate(c Client, update Update) {
+func (l *CommandListener) ReceiveUpdate(c Client, update Update) error {
 	cmd := extractCommand(update)
 	if cmd == nil {
-		return
+		return nil
 	}
 
 	if listener, ok := l.handlers[cmd.Key]; ok {
 		err := listener.HandleCommand(c, cmd)
 		if err != nil {
-			log.Printf("An error occurred while processing %v: %v", update, err)
+			return errors.Wrapf(err, "while handling %v", update)
 		}
 	}
+
+	return nil
 }
 
 func (l *CommandListener) AllowedUpdates() []string {

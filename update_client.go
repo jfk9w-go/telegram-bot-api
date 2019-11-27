@@ -27,7 +27,7 @@ type GetUpdatesOptions struct {
 	AllowedUpdates []string `json:"allowed_updates,omitempty"`
 }
 
-func (o *GetUpdatesOptions) body() flu.BodyWriter {
+func (o *GetUpdatesOptions) body() flu.BodyEncoderTo {
 	return flu.JSON(o)
 }
 

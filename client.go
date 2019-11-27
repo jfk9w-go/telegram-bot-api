@@ -1,13 +1,10 @@
 package telegram
 
 import (
-	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"time"
 
 	"github.com/jfk9w-go/flu"
-	"github.com/pkg/errors"
 )
 
 // client is the Telegram Bot API client implementation.
@@ -18,6 +15,17 @@ type client struct {
 	baseURI string
 }
 
+var acceptedResponseCodes = []int{
+	http.StatusOK,
+	http.StatusSeeOther,
+	http.StatusBadRequest,
+	http.StatusUnauthorized,
+	http.StatusForbidden,
+	http.StatusNotFound,
+	http.StatusTooManyRequests,
+	http.StatusInternalServerError,
+}
+
 func newClient(http *flu.Client, token string) *client {
 	if token == "" {
 		panic("token must not be empty")
@@ -26,7 +34,8 @@ func newClient(http *flu.Client, token string) *client {
 	if http == nil {
 		http = flu.NewTransport().
 			ResponseHeaderTimeout(2 * time.Minute).
-			NewClient()
+			NewClient().
+			AcceptResponseCodes(acceptedResponseCodes...)
 	}
 
 	return &client{
@@ -45,7 +54,7 @@ func (c *client) GetUpdates(options *GetUpdatesOptions) ([]Update, error) {
 		Resource(c.method("/getUpdates")).
 		Body(options.body()).
 		Send().
-		ReadResponseFunc(readResponse(&updates)).
+		Decode(newResponse(&updates)).
 		Error
 }
 
@@ -58,7 +67,7 @@ func (c *client) GetMe() (*User, error) {
 		GET().
 		Resource(c.method("/getMe")).
 		Send().
-		ReadResponseFunc(readResponse(user)).
+		Decode(newResponse(user)).
 		Error
 }
 
@@ -71,13 +80,13 @@ func (c *client) GetMe() (*User, error) {
 //   https://core.telegram.org/bots/api#sendvideo
 //   https://core.telegram.org/bots/api#senddocument
 //   https://core.telegram.org/bots/api#sendmediagroup
-func (c *client) send(url string, body flu.BodyWriter, resp interface{}) error {
+func (c *client) send(url string, body flu.BodyEncoderTo, resp interface{}) error {
 	return c.http.NewRequest().
 		POST().
 		Resource(url).
 		Body(body).
 		Send().
-		ReadResponseFunc(readResponse(resp)).
+		Decode(newResponse(resp)).
 		Error
 }
 
@@ -98,7 +107,7 @@ func (c *client) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("message_id", messageID.queryParam()).
 		Send().
-		ReadResponseFunc(readResponse(&r)).
+		Decode(newResponse(&r)).
 		Error
 }
 
@@ -113,7 +122,7 @@ func (c *client) GetChat(chatID ChatID) (*Chat, error) {
 		Resource(c.method("/getChat")).
 		QueryParam("chat_id", chatID.queryParam()).
 		Send().
-		ReadResponseFunc(readResponse(chat)).
+		Decode(newResponse(chat)).
 		Error
 }
 
@@ -129,7 +138,7 @@ func (c *client) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 		Resource(c.method("/getChatAdministrators")).
 		QueryParam("chat_id", chatID.queryParam()).
 		Send().
-		ReadResponseFunc(readResponse(&members)).
+		Decode(newResponse(&members)).
 		Error
 }
 
@@ -144,7 +153,7 @@ func (c *client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("user_id", userID.queryParam()).
 		Send().
-		ReadResponseFunc(readResponse(member)).
+		Decode(newResponse(member)).
 		Error
 }
 
@@ -159,43 +168,10 @@ func (c *client) AnswerCallbackQuery(id string, options *AnswerCallbackQueryOpti
 		Resource(c.method("/answerCallbackQuery")).
 		Body(options.body(id)).
 		Send().
-		ReadResponseFunc(readResponse(&r)).
+		Decode(newResponse(&r)).
 		Error
 }
 
 func (c *client) method(method string) string {
 	return c.baseURI + method
-}
-
-func readResponse(value interface{}) flu.ReadResponseFunc {
-	return func(resp *http.Response) error {
-		if _, ok := allowedStatusCodes[resp.StatusCode]; !ok {
-			return errors.Errorf("invalid status code: %d", resp.StatusCode)
-		}
-
-		data, err := ioutil.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			return err
-		}
-
-		r := new(response)
-		err = json.Unmarshal(data, r)
-		if err != nil {
-			return err
-		}
-
-		return r.parse(value)
-	}
-}
-
-var allowedStatusCodes = map[int]struct{}{
-	http.StatusOK:                  {},
-	http.StatusSeeOther:            {},
-	http.StatusBadRequest:          {},
-	http.StatusUnauthorized:        {},
-	http.StatusForbidden:           {},
-	http.StatusNotFound:            {},
-	http.StatusTooManyRequests:     {},
-	http.StatusInternalServerError: {},
 }

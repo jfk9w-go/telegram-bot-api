@@ -8,14 +8,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-type genericSendItem interface {
+type sendable interface {
 	kind() string
-	write(*flu.FormBody) (flu.BodyWriter, error)
+	body(flu.Form) (flu.BodyEncoderTo, error)
 }
 
-type SendItem interface {
-	genericSendItem
-	self() SendItem
+type Sendable interface {
+	sendable
+	self() Sendable
 }
 
 type Text struct {
@@ -28,11 +28,11 @@ func (t *Text) kind() string {
 	return "message"
 }
 
-func (t *Text) write(body *flu.FormBody) (flu.BodyWriter, error) {
+func (t *Text) body(body flu.Form) (flu.BodyEncoderTo, error) {
 	return body, nil
 }
 
-func (t *Text) self() SendItem {
+func (t *Text) self() Sendable {
 	return t
 }
 
@@ -45,28 +45,28 @@ const (
 )
 
 type Media struct {
-	Type      MediaType        `url:"-" json:"type"`
-	URL       string           `url:"-" json:"-"`
-	Resource  flu.ReadResource `url:"-" json:"-"`
-	Caption   string           `url:"caption,omitempty" json:"caption,omitempty"`
-	ParseMode ParseMode        `url:"parse_mode,omitempty" json:"parse_mode,omitempty"`
+	Type      MediaType          `url:"-" json:"type"`
+	URL       string             `url:"-" json:"-"`
+	Resource  flu.ResourceReader `url:"-" json:"-"`
+	Caption   string             `url:"caption,omitempty" json:"caption,omitempty"`
+	ParseMode ParseMode          `url:"parse_mode,omitempty" json:"parse_mode,omitempty"`
 }
 
 func (m *Media) kind() string {
 	return m.Type
 }
 
-func (m *Media) write(body *flu.FormBody) (flu.BodyWriter, error) {
+func (m *Media) body(form flu.Form) (flu.BodyEncoderTo, error) {
 	if m.URL != "" {
-		return body.Set(m.Type, m.URL), nil
+		return form.Set(m.Type, m.URL), nil
 	} else if m.Resource != nil {
-		return body.Multipart().Resource(m.Type, m.Resource), nil
+		return form.Multipart().Resource(m.Type, m.Resource), nil
 	}
 
 	return nil, errors.New("no URL or resource specified")
 }
 
-func (m *Media) self() SendItem {
+func (m *Media) self() Sendable {
 	return m
 }
 
@@ -81,15 +81,21 @@ func (mg MediaGroup) kind() string {
 	return "mediaGroup"
 }
 
-func (mg MediaGroup) write(body *flu.FormBody) (flu.BodyWriter, error) {
-	multipart := true
+func (mg MediaGroup) body(form flu.Form) (flu.BodyEncoderTo, error) {
+	var multipart flu.MultipartForm
+	multipartInitialized := false
+
 	media := make([]mediaJSON, len(mg))
 	for i, m := range mg {
 		m := mediaJSON{m, ""}
 		if m.Resource != nil {
-			multipart = true
+			if !multipartInitialized {
+				multipart = form.Multipart()
+				multipartInitialized = true
+			}
+
 			id := "media" + strconv.Itoa(i)
-			body.Multipart().Resource(id, m.Resource)
+			multipart.Resource(id, m.Resource)
 			m.MediaURL = "attach://" + id
 		} else if m.URL != "" {
 			m.MediaURL = m.URL
@@ -105,10 +111,10 @@ func (mg MediaGroup) write(body *flu.FormBody) (flu.BodyWriter, error) {
 		return nil, err
 	}
 
-	body.Add("media", string(bytes))
-	if multipart {
-		return body.Multipart(), nil
+	form.Add("media", string(bytes))
+	if multipartInitialized {
+		return multipart, nil
 	}
 
-	return body, nil
+	return form, nil
 }
