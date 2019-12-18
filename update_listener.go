@@ -6,7 +6,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Client = *sendClient
+type Client = *floodControlAwareClient
 
 // UpdateListener is a handler for incoming Updates.
 type UpdateListener interface {
@@ -34,12 +34,11 @@ func (l *CommandListener) Handle(key string, handler CommandHandler) *CommandLis
 	if _, ok := l.handlers[key]; ok {
 		panic("command handler for " + key + " already registered")
 	}
-
 	l.handlers[key] = handler
 	return l
 }
 
-// HandleFunc is a shortcut for Handle(key, CommandListerFunc(func (*sendClient, *Command) {...}))
+// HandleFunc is a shortcut for Handle(key, CommandListerFunc(func (*floodControlAwareClient, *Command) {...}))
 func (l *CommandListener) HandleFunc(key string, handler CommandHandlerFunc) *CommandListener {
 	return l.Handle(key, handler)
 }
@@ -49,14 +48,12 @@ func (l *CommandListener) ReceiveUpdate(c Client, update Update) error {
 	if cmd == nil {
 		return nil
 	}
-
 	if listener, ok := l.handlers[cmd.Key]; ok {
 		err := listener.HandleCommand(c, cmd)
 		if err != nil {
 			return errors.Wrapf(err, "while handling %v", update)
 		}
 	}
-
 	return nil
 }
 
@@ -73,7 +70,6 @@ func extractCommand(update Update) *Command {
 	case update.CallbackQuery != nil:
 		return extractCommandCallbackQuery(update.CallbackQuery)
 	}
-
 	return nil
 }
 
@@ -89,7 +85,6 @@ func extractCommandMessage(message *Message) *Command {
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -97,7 +92,6 @@ func extractCommandCallbackQuery(query *CallbackQuery) *Command {
 	if query.Data == nil {
 		return nil
 	}
-
 	for i, c := range *query.Data {
 		if c == ':' && len(*query.Data) > i+1 {
 			return &Command{
@@ -110,7 +104,6 @@ func extractCommandCallbackQuery(query *CallbackQuery) *Command {
 			}
 		}
 	}
-
 	return nil
 }
 

@@ -19,7 +19,6 @@ func MustParseID(value string) ID {
 	if err != nil {
 		panic(err)
 	}
-
 	return id
 }
 
@@ -27,7 +26,6 @@ func (id ID) queryParam() string {
 	if int64(id) == 0 {
 		return ""
 	}
-
 	return id.String()
 }
 

@@ -7,10 +7,10 @@ import (
 	"github.com/jfk9w-go/flu"
 )
 
-// client is the Telegram Bot API client implementation.
+// apiClient is the Telegram Bot API client implementation.
 // It can not be instantiated by package users.
 // Instead, it should be used as part of Bot.
-type client struct {
+type apiClient struct {
 	http    *flu.Client
 	baseURI string
 }
@@ -26,19 +26,17 @@ var acceptedResponseCodes = []int{
 	http.StatusInternalServerError,
 }
 
-func newClient(http *flu.Client, token string) *client {
+func newApiClient(http *flu.Client, token string) *apiClient {
 	if token == "" {
 		panic("token must not be empty")
 	}
-
 	if http == nil {
 		http = flu.NewTransport().
 			ResponseHeaderTimeout(2 * time.Minute).
 			NewClient().
 			AcceptResponseCodes(acceptedResponseCodes...)
 	}
-
-	return &client{
+	return &apiClient{
 		http:    http,
 		baseURI: "https://api.telegram.org/bot" + token,
 	}
@@ -47,7 +45,7 @@ func newClient(http *flu.Client, token string) *client {
 // Use this method to receive incoming updates using long polling.
 // An Array of Update objects is returned.
 // See https://core.telegram.org/bots/api#getupdates
-func (c *client) GetUpdates(options *GetUpdatesOptions) ([]Update, error) {
+func (c *apiClient) GetUpdates(options *GetUpdatesOptions) ([]Update, error) {
 	updates := make([]Update, 0)
 	return updates, c.http.NewRequest().
 		POST().
@@ -61,7 +59,7 @@ func (c *client) GetUpdates(options *GetUpdatesOptions) ([]Update, error) {
 // A simple method for testing your bot's auth token. Requires no parameters.
 // Returns basic information about the bot in form of a User object.
 // See https://core.telegram.org/bots/api#getme
-func (c *client) GetMe() (*User, error) {
+func (c *apiClient) GetMe() (*User, error) {
 	user := new(User)
 	return user, c.http.NewRequest().
 		GET().
@@ -80,7 +78,7 @@ func (c *client) GetMe() (*User, error) {
 //   https://core.telegram.org/bots/api#sendvideo
 //   https://core.telegram.org/bots/api#senddocument
 //   https://core.telegram.org/bots/api#sendmediagroup
-func (c *client) send(url string, body flu.BodyEncoderTo, resp interface{}) error {
+func (c *apiClient) send(url string, body flu.BodyEncoderTo, resp interface{}) error {
 	return c.http.NewRequest().
 		POST().
 		Resource(url).
@@ -99,7 +97,7 @@ func (c *client) send(url string, body flu.BodyEncoderTo, resp interface{}) erro
 // Returns True on success.
 // See
 //    https://core.telegram.org/bots/api#deletemessage
-func (c *client) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
+func (c *apiClient) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 	var r bool
 	return r, c.http.NewRequest().
 		GET().
@@ -115,7 +113,7 @@ func (c *client) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 // the user for one-on-one conversations, current username of a user, group or updateChannel, etc.).
 // Returns a Chat object on success.
 // See https://core.telegram.org/bots/api#getchat
-func (c *client) GetChat(chatID ChatID) (*Chat, error) {
+func (c *apiClient) GetChat(chatID ChatID) (*Chat, error) {
 	chat := new(Chat)
 	return chat, c.http.NewRequest().
 		GET().
@@ -131,7 +129,7 @@ func (c *client) GetChat(chatID ChatID) (*Chat, error) {
 // all chat administrators except other bots. If the chat is a group or a supergroup and
 // no administrators were appointed, only the creator will be returned.
 // See https://core.telegram.org/bots/api#getchatadministrators
-func (c *client) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
+func (c *apiClient) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 	members := make([]ChatMember, 0)
 	return members, c.http.NewRequest().
 		GET().
@@ -145,7 +143,7 @@ func (c *client) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 // Use this method to get information about a member of a chat.
 // Returns a ChatMember object on success.
 // See https://core.telegram.org/bots/api#getchatmember
-func (c *client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
+func (c *apiClient) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 	member := new(ChatMember)
 	return member, c.http.NewRequest().
 		GET().
@@ -161,7 +159,7 @@ func (c *client) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 // The answer will be displayed to the user as a notification at the top of the chat screen or as an alert.
 // On success, True is returned.
 // https://core.telegram.org/bots/api#answercallbackquery
-func (c *client) AnswerCallbackQuery(id string, options *AnswerCallbackQueryOptions) (bool, error) {
+func (c *apiClient) AnswerCallbackQuery(id string, options *AnswerCallbackQueryOptions) (bool, error) {
 	var r bool
 	return r, c.http.NewRequest().
 		POST().
@@ -172,6 +170,6 @@ func (c *client) AnswerCallbackQuery(id string, options *AnswerCallbackQueryOpti
 		Error
 }
 
-func (c *client) method(method string) string {
+func (c *apiClient) method(method string) string {
 	return c.baseURI + method
 }

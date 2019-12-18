@@ -33,17 +33,14 @@ func (o *SendOptions) body(chatID ChatID, item sendable) (flu.BodyEncoderTo, err
 	} else {
 		form = flu.FormValue(item, true)
 	}
-
 	form.Set("chat_id", chatID.queryParam())
 	if o != nil {
 		if o.DisableNotification {
 			form.Set("disable_notification", "1")
 		}
-
 		if o.ReplyToMessageID != 0 {
 			form.Set("reply_to_message_id", o.ReplyToMessageID.queryParam())
 		}
-
 		if !isMediaGroup && o.ReplyMarkup != nil {
 			bytes, err := json.Marshal(o.ReplyMarkup)
 			if err != nil {
@@ -53,6 +50,5 @@ func (o *SendOptions) body(chatID ChatID, item sendable) (flu.BodyEncoderTo, err
 			form.Set("reply_markup", string(bytes))
 		}
 	}
-
 	return item.body(form)
 }

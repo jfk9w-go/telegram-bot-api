@@ -81,10 +81,11 @@ func (mg MediaGroup) kind() string {
 	return "mediaGroup"
 }
 
+var ErrNoURLOrResource = errors.New("no URL or resource specified")
+
 func (mg MediaGroup) body(form flu.Form) (flu.BodyEncoderTo, error) {
 	var multipart flu.MultipartForm
 	multipartInitialized := false
-
 	media := make([]mediaJSON, len(mg))
 	for i, m := range mg {
 		m := mediaJSON{m, ""}
@@ -93,28 +94,23 @@ func (mg MediaGroup) body(form flu.Form) (flu.BodyEncoderTo, error) {
 				multipart = form.Multipart()
 				multipartInitialized = true
 			}
-
 			id := "media" + strconv.Itoa(i)
 			multipart.Resource(id, m.Resource)
 			m.MediaURL = "attach://" + id
 		} else if m.URL != "" {
 			m.MediaURL = m.URL
 		} else {
-			return nil, errors.New("no URL or resource specified")
+			return nil, ErrNoURLOrResource
 		}
-
 		media[i] = m
 	}
-
 	bytes, err := json.Marshal(media)
 	if err != nil {
 		return nil, err
 	}
-
 	form.Add("media", string(bytes))
 	if multipartInitialized {
 		return multipart, nil
 	}
-
 	return form, nil
 }

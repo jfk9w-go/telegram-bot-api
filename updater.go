@@ -31,33 +31,32 @@ func (o *GetUpdatesOptions) body() flu.BodyEncoderTo {
 	return flu.JSON(o)
 }
 
-type updateClient struct {
-	*sendClient
+type updater struct {
+	Client
 	options *GetUpdatesOptions
 }
 
-func newUpdateClient(send *sendClient, options *GetUpdatesOptions) *updateClient {
-	return &updateClient{
-		sendClient: send,
-		options:    options,
+func newUpdater(client Client, options *GetUpdatesOptions) *updater {
+	return &updater{
+		Client:  client,
+		options: options,
 	}
 }
 
-func (c *updateClient) Listen(listener UpdateListener) {
-	c.options.AllowedUpdates = listener.AllowedUpdates()
-	log.Printf("Listening for the following updates: %v", c.options.AllowedUpdates)
+func (u *updater) Listen(listener UpdateListener) {
+	u.options.AllowedUpdates = listener.AllowedUpdates()
+	log.Printf("Listening for the following updates: %v", u.options.AllowedUpdates)
 	for {
-		updates, err := c.GetUpdates(c.options)
+		updates, err := u.GetUpdates(u.options)
 		if err == nil {
 			for _, update := range updates {
-				go listener.ReceiveUpdate(c.sendClient, update)
-				c.options.Offset = update.ID.Increment()
+				//noinspection ALL
+				go listener.ReceiveUpdate(u.Client, update)
+				u.options.Offset = update.ID.Increment()
 			}
-
 			continue
 		}
-
 		log.Printf("Poll error: %v", err)
-		time.Sleep(time.Duration(c.options.TimeoutSecs) * time.Second)
+		time.Sleep(time.Duration(u.options.TimeoutSecs) * time.Second)
 	}
 }
