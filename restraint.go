@@ -1,6 +1,9 @@
 package telegram
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 type Restraint struct {
 	events   chan time.Time
@@ -9,7 +12,7 @@ type Restraint struct {
 
 func NewConcurrencyRestraint(concurrency int) Restraint {
 	if concurrency < 1 {
-		concurrency = 10000
+		concurrency = math.MaxInt32
 	}
 	event := make(chan time.Time, concurrency)
 	moment := time.Unix(0, 0)
