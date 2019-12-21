@@ -2,7 +2,6 @@ package telegram
 
 import (
 	"log"
-	"sync"
 	"time"
 
 	"github.com/jfk9w-go/flu"
@@ -46,25 +45,27 @@ func NewBot(http *flu.Client, token string) Bot {
 }
 
 func (u Bot) Listen(concurrency int, listener UpdateListener) {
-	control := NewConcurrencyRestraint(concurrency)
 	u.options.AllowedUpdates = listener.AllowedUpdates()
 	log.Printf("Listening for the following updates: %v", u.options.AllowedUpdates)
+	channel := make(chan Update)
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			for update := range channel {
+				err := listener.ReceiveUpdate(u.Client, update)
+				if err != nil {
+					log.Printf("Failed to process update %d: %v", update.ID, err)
+				}
+			}
+		}()
+	}
 	for {
 		updates, err := u.GetUpdates(u.options)
 		if err == nil {
 			for _, update := range updates {
-				work := sync.WaitGroup{}
-				work.Add(1)
-				control.start()
-				go func() {
-					err := listener.ReceiveUpdate(u.Client, update)
-					control.complete()
-					if err != nil {
-						log.Printf("Failed to process %d: %v", update.ID, err)
-					}
-					work.Done()
-				}()
-				work.Wait()
+				channel <- update
 				u.options.Offset = update.ID.Increment()
 			}
 			continue

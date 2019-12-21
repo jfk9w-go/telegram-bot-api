@@ -1,38 +1,68 @@
 package telegram
 
 import (
-	"math"
 	"time"
 )
 
-type Restraint struct {
-	events   chan time.Time
-	interval time.Duration
+type Restraint interface {
+	Start()
+	Complete()
 }
+
+type concurrencyRestraint chan struct{}
 
 func NewConcurrencyRestraint(concurrency int) Restraint {
 	if concurrency < 1 {
-		concurrency = math.MaxInt32
+		return NoRestraint{}
+	} else {
+		r := make(concurrencyRestraint, concurrency)
+		for i := 0; i < concurrency; i++ {
+			r.Complete()
+		}
+		return r
 	}
-	event := make(chan time.Time, concurrency)
-	moment := time.Unix(0, 0)
-	for i := 0; i < concurrency; i++ {
-		event <- moment
-	}
-	return Restraint{event, 0}
+}
+
+func (r concurrencyRestraint) Start() {
+	<-r
+}
+
+var unit struct{}
+
+func (r concurrencyRestraint) Complete() {
+	r <- unit
+}
+
+type intervalRestraint struct {
+	event    chan time.Time
+	interval time.Duration
 }
 
 func NewIntervalRestraint(interval time.Duration) Restraint {
-	events := make(chan time.Time, 1)
-	events <- time.Unix(0, 0)
-	return Restraint{events, interval}
+	if interval <= 0 {
+		return NoRestraint{}
+	} else {
+		event := make(chan time.Time, 1)
+		event <- time.Unix(0, 0)
+		return intervalRestraint{event, interval}
+	}
 }
 
-func (fc Restraint) start() {
-	prev := <-fc.events
-	time.Sleep(fc.interval - time.Now().Sub(prev))
+func (r intervalRestraint) Start() {
+	prev := <-r.event
+	time.Sleep(r.interval - time.Now().Sub(prev))
 }
 
-func (fc Restraint) complete() {
-	fc.events <- time.Now()
+func (r intervalRestraint) Complete() {
+	r.event <- time.Now()
+}
+
+type NoRestraint struct{}
+
+func (NoRestraint) Start() {
+
+}
+
+func (NoRestraint) Complete() {
+
 }

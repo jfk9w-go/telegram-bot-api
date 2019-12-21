@@ -39,13 +39,13 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 	exists := false
 	c.mutex.RLock()
 	if rec, ok := c.recipients[chatID]; ok {
-		rec.start()
-		rec.complete()
+		rec.Start()
+		rec.Complete()
 		exists = true
 	}
 	c.mutex.RUnlock()
-	c.gateway.start()
-	defer c.gateway.complete()
+	c.gateway.Start()
+	defer c.gateway.Complete()
 	for i := 0; i <= c.maxRetries; i++ {
 		err = c.api.send(url, body, resp)
 		switch err := err.(type) {
@@ -77,7 +77,7 @@ func (c *floodControlAwareClient) newRecipient(chat *Chat) {
 			restraint = rec
 		}
 	}
-	if restraint == (Restraint{}) {
+	if restraint == nil {
 		restraint = NewIntervalRestraint(SendDelays[chat.Type])
 	}
 	c.recipients[chat.ID] = restraint

@@ -39,7 +39,7 @@ func main() {
 		NewClient(), token).
 		// Listen to the commands. Blocks until Bot.Close() is called.
 		// Can be launched in a separate goroutine.
-		Listen(0, telegram.NewCommandListener().
+		Listen(2, telegram.NewCommandListener().
 			HandleFunc("/greet", func(tg telegram.Client, c *telegram.Command) error {
 				_, err := tg.Send(c.Chat.ID,
 					&telegram.Text{Text: "Hello, " + c.User.FirstName},
