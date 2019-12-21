@@ -36,14 +36,13 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 		return errors.Wrap(err, "failed to write send data")
 	}
 	url := c.method("/send" + strings.Title(item.kind()))
-	exists := false
 	c.mutex.RLock()
-	if rec, ok := c.recipients[chatID]; ok {
+	rec, exists := c.recipients[chatID]
+	c.mutex.RUnlock()
+	if exists {
 		rec.Start()
 		rec.Complete()
-		exists = true
 	}
-	c.mutex.RUnlock()
 	c.gateway.Start()
 	defer c.gateway.Complete()
 	for i := 0; i <= c.maxRetries; i++ {
