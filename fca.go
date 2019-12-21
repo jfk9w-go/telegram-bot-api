@@ -67,21 +67,17 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 
 func (c *floodControlAwareClient) newRecipient(chat *Chat) {
 	hasUsername := chat.Username != nil
-	var restraint Restraint
 	c.mutex.Lock()
-	if rec, ok := c.recipients[chat.ID]; ok {
-		restraint = rec
-	} else if hasUsername {
-		if rec, ok := c.recipients[*chat.Username]; ok {
-			restraint = rec
-		}
+	rec, ok := c.recipients[chat.ID]
+	if !ok && hasUsername {
+		rec, ok = c.recipients[*chat.Username]
 	}
-	if restraint == nil {
-		restraint = NewIntervalRestraint(SendDelays[chat.Type])
+	if !ok {
+		rec = NewIntervalRestraint(SendDelays[chat.Type])
 	}
-	c.recipients[chat.ID] = restraint
+	c.recipients[chat.ID] = rec
 	if hasUsername {
-		c.recipients[*chat.Username] = restraint
+		c.recipients[*chat.Username] = rec
 	}
 	c.mutex.Unlock()
 }
