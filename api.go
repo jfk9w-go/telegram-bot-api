@@ -7,10 +7,10 @@ import (
 	"github.com/jfk9w-go/flu"
 )
 
-// apiClient is the Telegram Bot API client implementation.
+// api is the Telegram Bot API client implementation.
 // It can not be instantiated by package users.
 // Instead, it should be used as part of Bot.
-type apiClient struct {
+type api struct {
 	http    *flu.Client
 	baseURI string
 }
@@ -26,7 +26,7 @@ var acceptedResponseCodes = []int{
 	http.StatusInternalServerError,
 }
 
-func newApiClient(http *flu.Client, token string) *apiClient {
+func newApi(http *flu.Client, token string) api {
 	if token == "" {
 		panic("token must not be empty")
 	}
@@ -36,7 +36,7 @@ func newApiClient(http *flu.Client, token string) *apiClient {
 			NewClient().
 			AcceptResponseCodes(acceptedResponseCodes...)
 	}
-	return &apiClient{
+	return api{
 		http:    http,
 		baseURI: "https://api.telegram.org/bot" + token,
 	}
@@ -45,11 +45,11 @@ func newApiClient(http *flu.Client, token string) *apiClient {
 // Use this method to receive incoming updates using long polling.
 // An Array of Update objects is returned.
 // See https://core.telegram.org/bots/api#getupdates
-func (c *apiClient) GetUpdates(options *GetUpdatesOptions) ([]Update, error) {
+func (api api) GetUpdates(options *GetUpdatesOptions) ([]Update, error) {
 	updates := make([]Update, 0)
-	return updates, c.http.NewRequest().
+	return updates, api.http.NewRequest().
 		POST().
-		Resource(c.method("/getUpdates")).
+		Resource(api.method("/getUpdates")).
 		Body(options.body()).
 		Send().
 		Read(newResponse(&updates)).
@@ -59,11 +59,11 @@ func (c *apiClient) GetUpdates(options *GetUpdatesOptions) ([]Update, error) {
 // A simple method for testing your bot's auth token. Requires no parameters.
 // Returns basic information about the bot in form of a User object.
 // See https://core.telegram.org/bots/api#getme
-func (c *apiClient) GetMe() (*User, error) {
+func (api api) GetMe() (*User, error) {
 	user := new(User)
-	return user, c.http.NewRequest().
+	return user, api.http.NewRequest().
 		GET().
-		Resource(c.method("/getMe")).
+		Resource(api.method("/getMe")).
 		Send().
 		Read(newResponse(user)).
 		Error
@@ -78,8 +78,8 @@ func (c *apiClient) GetMe() (*User, error) {
 //   https://core.telegram.org/bots/api#sendvideo
 //   https://core.telegram.org/bots/api#senddocument
 //   https://core.telegram.org/bots/api#sendmediagroup
-func (c *apiClient) send(url string, body flu.BodyWriter, resp interface{}) error {
-	return c.http.NewRequest().
+func (api api) send(url string, body flu.BodyWriter, resp interface{}) error {
+	return api.http.NewRequest().
 		POST().
 		Resource(url).
 		Body(body).
@@ -97,11 +97,11 @@ func (c *apiClient) send(url string, body flu.BodyWriter, resp interface{}) erro
 // Returns True on success.
 // See
 //    https://core.telegram.org/bots/api#deletemessage
-func (c *apiClient) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
+func (api api) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 	var r bool
-	return r, c.http.NewRequest().
+	return r, api.http.NewRequest().
 		GET().
-		Resource(c.method("/deleteMessage")).
+		Resource(api.method("/deleteMessage")).
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("message_id", messageID.queryParam()).
 		Send().
@@ -113,11 +113,11 @@ func (c *apiClient) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 // the user for one-on-one conversations, current username of a user, group or updateChannel, etc.).
 // Returns a Chat object on success.
 // See https://core.telegram.org/bots/api#getchat
-func (c *apiClient) GetChat(chatID ChatID) (*Chat, error) {
+func (api api) GetChat(chatID ChatID) (*Chat, error) {
 	chat := new(Chat)
-	return chat, c.http.NewRequest().
+	return chat, api.http.NewRequest().
 		GET().
-		Resource(c.method("/getChat")).
+		Resource(api.method("/getChat")).
 		QueryParam("chat_id", chatID.queryParam()).
 		Send().
 		Read(newResponse(chat)).
@@ -129,11 +129,11 @@ func (c *apiClient) GetChat(chatID ChatID) (*Chat, error) {
 // all chat administrators except other bots. If the chat is a group or a supergroup and
 // no administrators were appointed, only the creator will be returned.
 // See https://core.telegram.org/bots/api#getchatadministrators
-func (c *apiClient) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
+func (api api) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 	members := make([]ChatMember, 0)
-	return members, c.http.NewRequest().
+	return members, api.http.NewRequest().
 		GET().
-		Resource(c.method("/getChatAdministrators")).
+		Resource(api.method("/getChatAdministrators")).
 		QueryParam("chat_id", chatID.queryParam()).
 		Send().
 		Read(newResponse(&members)).
@@ -143,11 +143,11 @@ func (c *apiClient) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 // Use this method to get information about a member of a chat.
 // Returns a ChatMember object on success.
 // See https://core.telegram.org/bots/api#getchatmember
-func (c *apiClient) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
+func (api api) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 	member := new(ChatMember)
-	return member, c.http.NewRequest().
+	return member, api.http.NewRequest().
 		GET().
-		Resource(c.method("/getChatMember")).
+		Resource(api.method("/getChatMember")).
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("user_id", userID.queryParam()).
 		Send().
@@ -159,17 +159,17 @@ func (c *apiClient) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error)
 // The answer will be displayed to the user as a notification at the top of the chat screen or as an alert.
 // On success, True is returned.
 // https://core.telegram.org/bots/api#answercallbackquery
-func (c *apiClient) AnswerCallbackQuery(id string, options *AnswerCallbackQueryOptions) (bool, error) {
+func (api api) AnswerCallbackQuery(id string, options *AnswerCallbackQueryOptions) (bool, error) {
 	var r bool
-	return r, c.http.NewRequest().
+	return r, api.http.NewRequest().
 		POST().
-		Resource(c.method("/answerCallbackQuery")).
+		Resource(api.method("/answerCallbackQuery")).
 		Body(options.body(id)).
 		Send().
 		Read(newResponse(&r)).
 		Error
 }
 
-func (c *apiClient) method(method string) string {
-	return c.baseURI + method
+func (api api) method(method string) string {
+	return api.baseURI + method
 }

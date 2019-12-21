@@ -30,16 +30,16 @@ func (fc floodControl) complete() {
 }
 
 type floodControlAwareClient struct {
-	*apiClient
+	api
 	maxRetries int
 	gateway    floodControl
 	recipients map[ChatID]floodControl
 	mutex      sync.RWMutex
 }
 
-func newClient(api *apiClient, maxRetries int) Client {
+func newClient(api api, maxRetries int) Client {
 	return &floodControlAwareClient{
-		apiClient:  api,
+		api:        api,
 		maxRetries: maxRetries,
 		gateway:    newFloodControl(GatewaySendDelay),
 		recipients: make(map[ChatID]floodControl),
@@ -65,7 +65,7 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 	c.gateway.start()
 	defer c.gateway.complete()
 	for i := 0; i <= c.maxRetries; i++ {
-		err = c.apiClient.send(url, body, resp)
+		err = c.api.send(url, body, resp)
 		switch err := err.(type) {
 		case nil:
 			if exists {

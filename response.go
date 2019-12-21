@@ -38,7 +38,7 @@ func (r *response) ReadFrom(reader io.Reader) error {
 	}
 	if !r.Ok {
 		if r.Parameters != nil && r.Parameters.RetryAfter > 0 {
-			return &TooManyMessages{time.Duration(r.Parameters.RetryAfter) * time.Second}
+			return TooManyMessages{time.Duration(r.Parameters.RetryAfter) * time.Second}
 		}
 		return Error{r.ErrorCode, r.Description}
 	}
