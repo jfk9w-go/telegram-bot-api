@@ -9,31 +9,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-type floodControl struct {
-	event    chan time.Time
-	interval time.Duration
-}
-
-func newFloodControl(interval time.Duration) floodControl {
-	event := make(chan time.Time, 1)
-	event <- time.Unix(0, 0)
-	return floodControl{event, interval}
-}
-
-func (fc floodControl) start() {
-	prev := <-fc.event
-	time.Sleep(fc.interval - time.Now().Sub(prev))
-}
-
-func (fc floodControl) complete() {
-	fc.event <- time.Now()
-}
+type Client = *floodControlAwareClient
 
 type floodControlAwareClient struct {
 	api
 	maxRetries int
-	gateway    floodControl
-	recipients map[ChatID]floodControl
+	gateway    Restraint
+	recipients map[ChatID]Restraint
 	mutex      sync.RWMutex
 }
 
@@ -41,8 +23,8 @@ func newClient(api api, maxRetries int) Client {
 	return &floodControlAwareClient{
 		api:        api,
 		maxRetries: maxRetries,
-		gateway:    newFloodControl(GatewaySendDelay),
-		recipients: make(map[ChatID]floodControl),
+		gateway:    NewIntervalRestraint(GatewaySendDelay),
+		recipients: make(map[ChatID]Restraint),
 	}
 }
 
@@ -86,21 +68,21 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 
 func (c *floodControlAwareClient) newRecipient(chat *Chat) {
 	hasUsername := chat.Username != nil
-	var control floodControl
+	var restraint Restraint
 	c.mutex.Lock()
 	if rec, ok := c.recipients[chat.ID]; ok {
-		control = rec
+		restraint = rec
 	} else if hasUsername {
 		if rec, ok := c.recipients[*chat.Username]; ok {
-			control = rec
+			restraint = rec
 		}
 	}
-	if control == (floodControl{}) {
-		control = newFloodControl(SendDelays[chat.Type])
+	if restraint == (Restraint{}) {
+		restraint = NewIntervalRestraint(SendDelays[chat.Type])
 	}
-	c.recipients[chat.ID] = control
+	c.recipients[chat.ID] = restraint
 	if hasUsername {
-		c.recipients[*chat.Username] = control
+		c.recipients[*chat.Username] = restraint
 	}
 	c.mutex.Unlock()
 }

@@ -6,8 +6,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Client = *floodControlAwareClient
-
 // UpdateListener is a handler for incoming Updates.
 type UpdateListener interface {
 	// ReceiveUpdate is called on every received Update.
