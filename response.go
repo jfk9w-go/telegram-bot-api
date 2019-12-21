@@ -40,8 +40,7 @@ func (r *response) ReadFrom(reader io.Reader) error {
 		if r.Parameters != nil && r.Parameters.RetryAfter > 0 {
 			return &TooManyMessages{time.Duration(r.Parameters.RetryAfter) * time.Second}
 		}
-
-		return &Error{r.ErrorCode, r.Description}
+		return Error{r.ErrorCode, r.Description}
 	}
 	return nil
 }
@@ -55,7 +54,7 @@ type Error struct {
 	Description string
 }
 
-func (e *Error) Error() string {
+func (e Error) Error() string {
 	return fmt.Sprintf("%d %s", e.ErrorCode, e.Description)
 }
 
@@ -64,6 +63,6 @@ type TooManyMessages struct {
 	RetryAfter time.Duration
 }
 
-func (e *TooManyMessages) Error() string {
+func (e TooManyMessages) Error() string {
 	return fmt.Sprintf("too many messages, retry after %.0f seconds", e.RetryAfter.Seconds())
 }

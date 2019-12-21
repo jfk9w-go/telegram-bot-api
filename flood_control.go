@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -53,7 +54,6 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 		return errors.Wrap(err, "failed to write send data")
 	}
 	url := c.method("/send" + strings.Title(item.kind()))
-
 	exists := false
 	c.mutex.RLock()
 	if rec, ok := c.recipients[chatID]; ok {
@@ -62,16 +62,26 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 		exists = true
 	}
 	c.mutex.RUnlock()
-
 	c.gateway.start()
-	err = c.apiClient.send(url, body, resp)
-	c.gateway.complete()
-
-	if err == nil && !exists {
-		return unknownRecipientErr
-	} else {
-		return err
+	defer c.gateway.complete()
+	for i := 0; i <= c.maxRetries; i++ {
+		err = c.apiClient.send(url, body, resp)
+		switch err := err.(type) {
+		case nil:
+			if exists {
+				return nil
+			} else {
+				return unknownRecipientErr
+			}
+		case TooManyMessages:
+			log.Printf("Too many messages, sleeping for %s...", err.RetryAfter)
+			time.Sleep(err.RetryAfter)
+			continue
+		default:
+			time.Sleep(GatewaySendDelay)
+		}
 	}
+	return err
 }
 
 func (c *floodControlAwareClient) newRecipient(chat *Chat) {
