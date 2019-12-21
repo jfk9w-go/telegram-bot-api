@@ -11,6 +11,6 @@ type AnswerCallbackQueryOptions struct {
 	CacheTime int    `url:"cache_time,omitempty"`
 }
 
-func (o *AnswerCallbackQueryOptions) body(id string) flu.BodyEncoderTo {
+func (o *AnswerCallbackQueryOptions) body(id string) flu.BodyWriter {
 	return flu.FormValue(o, true).Add("callback_query_id", id)
 }

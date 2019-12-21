@@ -31,8 +31,8 @@ func newResponse(value interface{}) *response {
 	}
 }
 
-func (r *response) DecodeFrom(reader io.Reader) error {
-	err := flu.JSON(r).DecodeFrom(reader)
+func (r *response) ReadFrom(reader io.Reader) error {
+	err := flu.JSON(r).ReadFrom(reader)
 	if err != nil {
 		return err
 	}

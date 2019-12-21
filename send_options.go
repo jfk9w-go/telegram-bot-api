@@ -25,7 +25,7 @@ type SendOptions struct {
 	ReplyMarkup         ReplyMarkup
 }
 
-func (o *SendOptions) body(chatID ChatID, item sendable) (flu.BodyEncoderTo, error) {
+func (o *SendOptions) body(chatID ChatID, item sendable) (flu.BodyWriter, error) {
 	isMediaGroup := item.kind() == "mediaGroup"
 	var form flu.Form
 	if isMediaGroup {

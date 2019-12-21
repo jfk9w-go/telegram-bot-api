@@ -50,7 +50,7 @@ func main() {
 			_, err := tg.Send(c.Chat.ID,
 				&telegram.Media{
 					Type:      telegram.Photo,
-					Resource:  flu.File("tick.png"),
+					Readable:  flu.File("tick.png"),
 					Caption:   "Here's a <b>tick</b> for ya.",
 					ParseMode: telegram.HTML},
 				&telegram.SendOptions{DisableNotification: true})
@@ -61,7 +61,7 @@ func main() {
 			for i := range media {
 				media[i] = telegram.Media{
 					Type:     telegram.Photo,
-					Resource: flu.File("tick.png"),
+					Readable: flu.File("tick.png"),
 					Caption:  "Image " + strconv.Itoa(i)}
 			}
 			_, err := tg.SendMediaGroup(c.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})

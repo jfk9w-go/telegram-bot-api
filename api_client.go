@@ -52,7 +52,7 @@ func (c *apiClient) GetUpdates(options *GetUpdatesOptions) ([]Update, error) {
 		Resource(c.method("/getUpdates")).
 		Body(options.body()).
 		Send().
-		Decode(newResponse(&updates)).
+		Read(newResponse(&updates)).
 		Error
 }
 
@@ -65,7 +65,7 @@ func (c *apiClient) GetMe() (*User, error) {
 		GET().
 		Resource(c.method("/getMe")).
 		Send().
-		Decode(newResponse(user)).
+		Read(newResponse(user)).
 		Error
 }
 
@@ -78,13 +78,13 @@ func (c *apiClient) GetMe() (*User, error) {
 //   https://core.telegram.org/bots/api#sendvideo
 //   https://core.telegram.org/bots/api#senddocument
 //   https://core.telegram.org/bots/api#sendmediagroup
-func (c *apiClient) send(url string, body flu.BodyEncoderTo, resp interface{}) error {
+func (c *apiClient) send(url string, body flu.BodyWriter, resp interface{}) error {
 	return c.http.NewRequest().
 		POST().
 		Resource(url).
 		Body(body).
 		Send().
-		Decode(newResponse(resp)).
+		Read(newResponse(resp)).
 		Error
 }
 
@@ -105,7 +105,7 @@ func (c *apiClient) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("message_id", messageID.queryParam()).
 		Send().
-		Decode(newResponse(&r)).
+		Read(newResponse(&r)).
 		Error
 }
 
@@ -120,7 +120,7 @@ func (c *apiClient) GetChat(chatID ChatID) (*Chat, error) {
 		Resource(c.method("/getChat")).
 		QueryParam("chat_id", chatID.queryParam()).
 		Send().
-		Decode(newResponse(chat)).
+		Read(newResponse(chat)).
 		Error
 }
 
@@ -136,7 +136,7 @@ func (c *apiClient) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 		Resource(c.method("/getChatAdministrators")).
 		QueryParam("chat_id", chatID.queryParam()).
 		Send().
-		Decode(newResponse(&members)).
+		Read(newResponse(&members)).
 		Error
 }
 
@@ -151,7 +151,7 @@ func (c *apiClient) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error)
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("user_id", userID.queryParam()).
 		Send().
-		Decode(newResponse(member)).
+		Read(newResponse(member)).
 		Error
 }
 
@@ -166,7 +166,7 @@ func (c *apiClient) AnswerCallbackQuery(id string, options *AnswerCallbackQueryO
 		Resource(c.method("/answerCallbackQuery")).
 		Body(options.body(id)).
 		Send().
-		Decode(newResponse(&r)).
+		Read(newResponse(&r)).
 		Error
 }
 

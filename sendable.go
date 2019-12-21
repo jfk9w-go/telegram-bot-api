@@ -10,7 +10,7 @@ import (
 
 type sendable interface {
 	kind() string
-	body(flu.Form) (flu.BodyEncoderTo, error)
+	body(flu.Form) (flu.BodyWriter, error)
 }
 
 type Sendable interface {
@@ -28,7 +28,7 @@ func (t *Text) kind() string {
 	return "message"
 }
 
-func (t *Text) body(body flu.Form) (flu.BodyEncoderTo, error) {
+func (t *Text) body(body flu.Form) (flu.BodyWriter, error) {
 	return body, nil
 }
 
@@ -45,24 +45,23 @@ const (
 )
 
 type Media struct {
-	Type      MediaType          `url:"-" json:"type"`
-	URL       string             `url:"-" json:"-"`
-	Resource  flu.ResourceReader `url:"-" json:"-"`
-	Caption   string             `url:"caption,omitempty" json:"caption,omitempty"`
-	ParseMode ParseMode          `url:"parse_mode,omitempty" json:"parse_mode,omitempty"`
+	Type      MediaType    `url:"-" json:"type"`
+	URL       string       `url:"-" json:"-"`
+	Readable  flu.Readable `url:"-" json:"-"`
+	Caption   string       `url:"caption,omitempty" json:"caption,omitempty"`
+	ParseMode ParseMode    `url:"parse_mode,omitempty" json:"parse_mode,omitempty"`
 }
 
 func (m *Media) kind() string {
 	return m.Type
 }
 
-func (m *Media) body(form flu.Form) (flu.BodyEncoderTo, error) {
+func (m *Media) body(form flu.Form) (flu.BodyWriter, error) {
 	if m.URL != "" {
 		return form.Set(m.Type, m.URL), nil
-	} else if m.Resource != nil {
-		return form.Multipart().Resource(m.Type, m.Resource), nil
+	} else if m.Readable != nil {
+		return form.Multipart().File(m.Type, m.Readable), nil
 	}
-
 	return nil, errors.New("no URL or resource specified")
 }
 
@@ -83,19 +82,19 @@ func (mg MediaGroup) kind() string {
 
 var ErrNoURLOrResource = errors.New("no URL or resource specified")
 
-func (mg MediaGroup) body(form flu.Form) (flu.BodyEncoderTo, error) {
+func (mg MediaGroup) body(form flu.Form) (flu.BodyWriter, error) {
 	var multipart flu.MultipartForm
 	multipartInitialized := false
 	media := make([]mediaJSON, len(mg))
 	for i, m := range mg {
 		m := mediaJSON{m, ""}
-		if m.Resource != nil {
+		if m.Readable != nil {
 			if !multipartInitialized {
 				multipart = form.Multipart()
 				multipartInitialized = true
 			}
 			id := "media" + strconv.Itoa(i)
-			multipart.Resource(id, m.Resource)
+			multipart.File(id, m.Readable)
 			m.MediaURL = "attach://" + id
 		} else if m.URL != "" {
 			m.MediaURL = m.URL
