@@ -41,7 +41,7 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 	c.mutex.RUnlock()
 	if exists {
 		rec.Start()
-		rec.Complete()
+		defer rec.Complete()
 	}
 	c.gateway.Start()
 	defer c.gateway.Complete()
