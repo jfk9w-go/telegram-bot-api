@@ -116,8 +116,6 @@ func main() {
 				if err != nil {
 					return err
 				}
-				// executing in a separate goroutine anyway
-				// we don't expect that much of a load
 				time.Sleep(timeout)
 				ok, err := tg.DeleteMessage(m.Chat.ID, m.ID)
 				log.Printf("Message deleted: %v", ok)
