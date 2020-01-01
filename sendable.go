@@ -57,10 +57,10 @@ func (m *Media) kind() string {
 }
 
 func (m *Media) body(form flu.Form) (flu.BodyWriter, error) {
-	if m.URL != "" {
-		return form.Set(m.Type, m.URL), nil
-	} else if m.Resource != nil {
+	if m.Resource != nil {
 		return form.Multipart().File(m.Type, m.Resource), nil
+	} else if m.URL != "" {
+		return form.Set(m.Type, m.URL), nil
 	}
 	return nil, errors.New("no URL or resource specified")
 }
