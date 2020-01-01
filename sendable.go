@@ -47,7 +47,7 @@ const (
 type Media struct {
 	Type      MediaType    `url:"-" json:"type"`
 	URL       string       `url:"-" json:"-"`
-	Readable  flu.Readable `url:"-" json:"-"`
+	Resource  flu.Readable `url:"-" json:"-"`
 	Caption   string       `url:"caption,omitempty" json:"caption,omitempty"`
 	ParseMode ParseMode    `url:"parse_mode,omitempty" json:"parse_mode,omitempty"`
 }
@@ -59,8 +59,8 @@ func (m *Media) kind() string {
 func (m *Media) body(form flu.Form) (flu.BodyWriter, error) {
 	if m.URL != "" {
 		return form.Set(m.Type, m.URL), nil
-	} else if m.Readable != nil {
-		return form.Multipart().File(m.Type, m.Readable), nil
+	} else if m.Resource != nil {
+		return form.Multipart().File(m.Type, m.Resource), nil
 	}
 	return nil, errors.New("no URL or resource specified")
 }
@@ -88,13 +88,13 @@ func (mg MediaGroup) body(form flu.Form) (flu.BodyWriter, error) {
 	media := make([]mediaJSON, len(mg))
 	for i, m := range mg {
 		m := mediaJSON{m, ""}
-		if m.Readable != nil {
+		if m.Resource != nil {
 			if !multipartInitialized {
 				multipart = form.Multipart()
 				multipartInitialized = true
 			}
 			id := "media" + strconv.Itoa(i)
-			multipart.File(id, m.Readable)
+			multipart.File(id, m.Resource)
 			m.MediaURL = "attach://" + id
 		} else if m.URL != "" {
 			m.MediaURL = m.URL
