@@ -41,13 +41,13 @@ func (l *CommandListener) HandleFunc(key string, handler CommandHandlerFunc) *Co
 	return l.Handle(key, handler)
 }
 
-func (l *CommandListener) ReceiveUpdate(c Client, update Update) error {
+func (l *CommandListener) ReceiveUpdate(client Client, update Update) error {
 	cmd := extractCommand(update)
 	if cmd == nil {
 		return nil
 	}
 	if listener, ok := l.handlers[cmd.Key]; ok {
-		err := listener.HandleCommand(c, cmd)
+		err := listener.HandleCommand(client, cmd)
 		if err != nil {
 			return errors.Wrapf(err, "while handling %v", update)
 		}
@@ -75,11 +75,11 @@ func extractCommandMessage(message *Message) *Command {
 	for _, entity := range message.Entities {
 		if entity.Type == "bot_command" {
 			return &Command{
-				User:      &message.From,
-				Chat:      &message.Chat,
-				MessageID: message.ID,
-				Key:       message.Text[entity.Offset : entity.Offset+entity.Length],
-				Payload:   strings.Trim(message.Text[entity.Offset+entity.Length:], " "),
+				User:    &message.From,
+				Chat:    &message.Chat,
+				Message: message,
+				Key:     message.Text[entity.Offset : entity.Offset+entity.Length],
+				Payload: strings.Trim(message.Text[entity.Offset+entity.Length:], " "),
 			}
 		}
 	}
@@ -95,7 +95,7 @@ func extractCommandCallbackQuery(query *CallbackQuery) *Command {
 			return &Command{
 				Chat:            &query.Message.Chat,
 				User:            &query.From,
-				MessageID:       query.Message.ID,
+				Message:         query.Message,
 				Key:             (*query.Data)[:i],
 				Payload:         (*query.Data)[i+1:],
 				CallbackQueryID: query.ID,
@@ -105,27 +105,39 @@ func extractCommandCallbackQuery(query *CallbackQuery) *Command {
 	return nil
 }
 
-func CommandButton(text, key, data string) ReplyMarkup {
-	return &InlineKeyboardMarkup{
-		InlineKeyboard: [][]InlineKeyboardButton{
-			{
-				{
-					Text:         text,
-					CallbackData: key + ":" + data,
-				},
-			},
-		},
+func InlineKeyboard(triples ...string) ReplyMarkup {
+	if len(triples)%3 != 0 {
+		panic(errors.Errorf("triples has length of %d which is not a multiple of 3", len(triples)))
 	}
+	realLength := len(triples) / 3
+	buttons := make([][]InlineKeyboardButton, realLength)
+	for i := 0; i < realLength; i++ {
+		buttons[i] = []InlineKeyboardButton{{
+			Text:         triples[3*i],
+			CallbackData: triples[3*i+1] + ":" + triples[3*i+2],
+		}}
+	}
+	return &InlineKeyboardMarkup{buttons}
 }
 
 // Command is a text bot command.
 type Command struct {
 	Chat            *Chat
 	User            *User
-	MessageID       ID
+	Message         *Message
 	Key             string
 	Payload         string
 	CallbackQueryID string
+}
+
+func (c *Command) Reply(client Client, text string) error {
+	if c.CallbackQueryID != "" {
+		_, err := client.AnswerCallbackQuery(c.CallbackQueryID, &AnswerCallbackQueryOptions{Text: text})
+		return err
+	} else {
+		_, err := client.Send(c.Chat.ID, &Text{Text: text}, &SendOptions{ReplyToMessageID: c.Message.ID})
+		return err
+	}
 }
 
 // CommandHandler describes a bot command handler.

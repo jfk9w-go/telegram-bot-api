@@ -40,14 +40,14 @@ func main() {
 		// Listen to the commands. Blocks until Bot.Close() is called.
 		// Can be launched in a separate goroutine.
 		Listen(2, telegram.NewCommandListener().
-			HandleFunc("/greet", func(tg telegram.Client, c *telegram.Command) error {
-				_, err := tg.Send(c.Chat.ID,
-					&telegram.Text{Text: "Hello, " + c.User.FirstName},
-					&telegram.SendOptions{ReplyToMessageID: c.MessageID})
+			HandleFunc("/greet", func(tg telegram.Client, cmd *telegram.Command) error {
+				_, err := tg.Send(cmd.Chat.ID,
+					&telegram.Text{Text: "Hello, " + cmd.User.FirstName},
+					&telegram.SendOptions{ReplyToMessageID: cmd.Message.ID})
 				return err
 			}).
-			HandleFunc("/tick", func(tg telegram.Client, c *telegram.Command) error {
-				_, err := tg.Send(c.Chat.ID,
+			HandleFunc("/tick", func(tg telegram.Client, cmd *telegram.Command) error {
+				_, err := tg.Send(cmd.Chat.ID,
 					&telegram.Media{
 						Type:      telegram.Photo,
 						Readable:  flu.File("tick.png"),
@@ -67,52 +67,36 @@ func main() {
 				_, err := tg.SendMediaGroup(c.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
 				return err
 			}).
-			HandleFunc("/count", func(tg telegram.Client, c *telegram.Command) error {
-				limit, err := strconv.Atoi(c.Payload)
-				if err == nil {
-					if limit <= 0 {
-						err = errors.New("limit must be positive")
-					}
+			HandleFunc("/count", func(tg telegram.Client, cmd *telegram.Command) error {
+				limit, err := strconv.Atoi(cmd.Payload)
+				if err == nil && limit <= 0 {
+					err = errors.New("limit must be positive")
 				}
 				if err != nil {
-					_, err = tg.Send(c.Chat.ID,
-						&telegram.Text{Text: err.Error()},
-						&telegram.SendOptions{DisableNotification: true})
-					return err
+					return cmd.Reply(tg, err.Error())
 				}
 				for i := 1; i <= limit; i++ {
-					_, err := tg.Send(c.Chat.ID, &telegram.Text{Text: fmt.Sprintf("%d", i)}, nil)
+					_, err := tg.Send(cmd.Chat.ID, &telegram.Text{Text: fmt.Sprintf("%d", i)}, nil)
 					if err != nil {
 						return err
 					}
 				}
 				return nil
 			}).
-			HandleFunc("/secret", func(tg telegram.Client, c *telegram.Command) error {
-				var err error
-				fields := strings.Fields(c.Payload)
+			HandleFunc("/secret", func(tg telegram.Client, cmd *telegram.Command) error {
+				fields := strings.Fields(cmd.Payload)
 				if len(fields) != 2 {
-					err = errors.New("usage: /secret Hi 5")
+					return cmd.Reply(tg, "usage: /secret Hi 5")
 				}
-				var timeout time.Duration
-				if err == nil {
-					var secs int
-					secs, err = strconv.Atoi(fields[1])
-					if err == nil {
-						if secs <= 0 {
-							err = errors.New("secs must be positive")
-						} else {
-							timeout = time.Duration(secs) * time.Second
-						}
-					}
+				secs, err := strconv.Atoi(fields[1])
+				if err == nil && secs <= 0 {
+					err = errors.New("secs must be positive")
 				}
 				if err != nil {
-					_, err := tg.Send(c.Chat.ID,
-						&telegram.Text{Text: err.Error()},
-						&telegram.SendOptions{ReplyToMessageID: c.MessageID})
-					return err
+					return cmd.Reply(tg, err.Error())
 				}
-				m, err := tg.Send(c.Chat.ID, &telegram.Text{Text: fields[0]}, nil)
+				timeout := time.Duration(secs) * time.Second
+				m, err := tg.Send(cmd.Chat.ID, &telegram.Text{Text: fields[0]}, nil)
 				if err != nil {
 					return err
 				}
@@ -121,24 +105,19 @@ func main() {
 				log.Printf("Message deleted: %v", ok)
 				return err
 			}).
-			HandleFunc("/say", func(tg telegram.Client, c *telegram.Command) error {
-				if c.Payload == "" {
-					_, err := tg.Send(c.Chat.ID,
-						&telegram.Text{Text: "Please specify a message"},
-						&telegram.SendOptions{ReplyToMessageID: c.MessageID})
-					return err
+			HandleFunc("/say", func(tg telegram.Client, cmd *telegram.Command) error {
+				if cmd.Payload == "" {
+					return cmd.Reply(tg, "Please specify a message")
 				}
-				_, err := tg.Send(c.Chat.ID,
+				_, err := tg.Send(cmd.Chat.ID,
 					&telegram.Text{Text: "Here you go."},
-					&telegram.SendOptions{ReplyMarkup: telegram.CommandButton("Say "+c.Payload, "say", c.Payload)})
+					&telegram.SendOptions{
+						ReplyMarkup: telegram.InlineKeyboard(
+							"Say "+cmd.Payload, "say", cmd.Payload,
+							"Another button", "", "")})
 				return err
 			}).
-			HandleFunc("say", func(tg telegram.Client, c *telegram.Command) error {
-				if c.CallbackQueryID == "" {
-					return errors.New("callback query ID is nil")
-				}
-				_, err := tg.AnswerCallbackQuery(c.CallbackQueryID,
-					&telegram.AnswerCallbackQueryOptions{Text: c.Payload})
-				return err
+			HandleFunc("say", func(tg telegram.Client, cmd *telegram.Command) error {
+				return cmd.Reply(tg, cmd.Payload)
 			}))
 }
