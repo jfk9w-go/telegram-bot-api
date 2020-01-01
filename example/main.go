@@ -27,19 +27,18 @@ import (
 func main() {
 	go func() { log.Println(http.ListenAndServe("localhost:6060", nil)) }()
 	// First read the token and proxy from command line arguments.
-	token := os.Args[1]
 	proxy := ""
-	if len(os.Args) > 2 {
-		proxy = os.Args[2]
+	if len(os.Args) > 3 {
+		proxy = os.Args[3]
 	}
 	// Create a bot instance.
 	telegram.NewBot(flu.NewTransport().
 		ResponseHeaderTimeout(2*time.Minute).
 		ProxyURL(proxy).
-		NewClient(), token).
+		NewClient(), os.Args[1]).
 		// Listen to the commands. Blocks until Bot.Close() is called.
 		// Can be launched in a separate goroutine.
-		Listen(2, telegram.NewCommandListener().
+		Listen(2, telegram.NewCommandListener(os.Args[2]).
 			HandleFunc("/greet", func(tg telegram.Client, cmd *telegram.Command) error {
 				_, err := tg.Send(cmd.Chat.ID,
 					&telegram.Text{Text: "Hello, " + cmd.User.FirstName},

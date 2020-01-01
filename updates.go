@@ -19,11 +19,12 @@ type UpdateListener interface {
 // with message and edited_message allowed updates.
 type CommandListener struct {
 	handlers map[string]CommandHandler
+	username string
 }
 
 // NewCommandListener creates a new instance of CommandListener.
-func NewCommandListener() *CommandListener {
-	return &CommandListener{make(map[string]CommandHandler)}
+func NewCommandListener(username string) *CommandListener {
+	return &CommandListener{make(map[string]CommandHandler), username}
 }
 
 // Handle binds a CommandHandler to a command.
@@ -42,7 +43,7 @@ func (l *CommandListener) HandleFunc(key string, handler CommandHandlerFunc) *Co
 }
 
 func (l *CommandListener) ReceiveUpdate(client Client, update Update) error {
-	cmd := extractCommand(update)
+	cmd := l.extractCommand(update)
 	if cmd == nil {
 		return nil
 	}
@@ -59,26 +60,31 @@ func (l *CommandListener) AllowedUpdates() []string {
 	return []string{"message", "edited_message", "callback_query"}
 }
 
-func extractCommand(update Update) *Command {
+func (l *CommandListener) extractCommand(update Update) *Command {
 	switch {
 	case update.Message != nil:
-		return extractCommandMessage(update.Message)
+		return l.extractCommandMessage(update.Message)
 	case update.EditedMessage != nil:
-		return extractCommandMessage(update.EditedMessage)
+		return l.extractCommandMessage(update.EditedMessage)
 	case update.CallbackQuery != nil:
-		return extractCommandCallbackQuery(update.CallbackQuery)
+		return l.extractCommandCallbackQuery(update.CallbackQuery)
 	}
 	return nil
 }
 
-func extractCommandMessage(message *Message) *Command {
+func (l *CommandListener) extractCommandMessage(message *Message) *Command {
 	for _, entity := range message.Entities {
 		if entity.Type == "bot_command" {
+			key := message.Text[entity.Offset : entity.Offset+entity.Length]
+			at := strings.Index(key, "@")
+			if at > 0 && len(key) > at && l.username == key[at+1:] {
+				key = key[:at]
+			}
 			return &Command{
 				User:    &message.From,
 				Chat:    &message.Chat,
 				Message: message,
-				Key:     message.Text[entity.Offset : entity.Offset+entity.Length],
+				Key:     key,
 				Payload: strings.Trim(message.Text[entity.Offset+entity.Length:], " "),
 			}
 		}
@@ -86,7 +92,7 @@ func extractCommandMessage(message *Message) *Command {
 	return nil
 }
 
-func extractCommandCallbackQuery(query *CallbackQuery) *Command {
+func (l *CommandListener) extractCommandCallbackQuery(query *CallbackQuery) *Command {
 	if query.Data == nil {
 		return nil
 	}
