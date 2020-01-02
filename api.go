@@ -47,11 +47,10 @@ func newApi(http *flu.Client, token string) api {
 // See https://core.telegram.org/bots/api#getupdates
 func (api api) GetUpdates(options *GetUpdatesOptions) ([]Update, error) {
 	updates := make([]Update, 0)
-	return updates, api.http.NewRequest().
-		POST().
-		Resource(api.method("/getUpdates")).
+	return updates, api.http.
+		POST(api.method("/getUpdates")).
 		Body(options.body()).
-		Send().
+		Execute().
 		Read(newResponse(&updates)).
 		Error
 }
@@ -61,10 +60,9 @@ func (api api) GetUpdates(options *GetUpdatesOptions) ([]Update, error) {
 // See https://core.telegram.org/bots/api#getme
 func (api api) GetMe() (*User, error) {
 	user := new(User)
-	return user, api.http.NewRequest().
-		GET().
-		Resource(api.method("/getMe")).
-		Send().
+	return user, api.http.
+		GET(api.method("/getMe")).
+		Execute().
 		Read(newResponse(user)).
 		Error
 }
@@ -79,11 +77,10 @@ func (api api) GetMe() (*User, error) {
 //   https://core.telegram.org/bots/api#senddocument
 //   https://core.telegram.org/bots/api#sendmediagroup
 func (api api) send(url string, body flu.BodyWriter, resp interface{}) error {
-	return api.http.NewRequest().
-		POST().
-		Resource(url).
+	return api.http.
+		POST(url).
 		Body(body).
-		Send().
+		Execute().
 		Read(newResponse(resp)).
 		Error
 }
@@ -99,12 +96,11 @@ func (api api) send(url string, body flu.BodyWriter, resp interface{}) error {
 //    https://core.telegram.org/bots/api#deletemessage
 func (api api) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 	var r bool
-	return r, api.http.NewRequest().
-		GET().
-		Resource(api.method("/deleteMessage")).
+	return r, api.http.
+		GET(api.method("/deleteMessage")).
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("message_id", messageID.queryParam()).
-		Send().
+		Execute().
 		Read(newResponse(&r)).
 		Error
 }
@@ -115,11 +111,10 @@ func (api api) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 // See https://core.telegram.org/bots/api#getchat
 func (api api) GetChat(chatID ChatID) (*Chat, error) {
 	chat := new(Chat)
-	return chat, api.http.NewRequest().
-		GET().
-		Resource(api.method("/getChat")).
+	return chat, api.http.
+		GET(api.method("/getChat")).
 		QueryParam("chat_id", chatID.queryParam()).
-		Send().
+		Execute().
 		Read(newResponse(chat)).
 		Error
 }
@@ -131,11 +126,10 @@ func (api api) GetChat(chatID ChatID) (*Chat, error) {
 // See https://core.telegram.org/bots/api#getchatadministrators
 func (api api) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 	members := make([]ChatMember, 0)
-	return members, api.http.NewRequest().
-		GET().
-		Resource(api.method("/getChatAdministrators")).
+	return members, api.http.
+		GET(api.method("/getChatAdministrators")).
 		QueryParam("chat_id", chatID.queryParam()).
-		Send().
+		Execute().
 		Read(newResponse(&members)).
 		Error
 }
@@ -145,12 +139,11 @@ func (api api) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 // See https://core.telegram.org/bots/api#getchatmember
 func (api api) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 	member := new(ChatMember)
-	return member, api.http.NewRequest().
-		GET().
-		Resource(api.method("/getChatMember")).
+	return member, api.http.
+		GET(api.method("/getChatMember")).
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("user_id", userID.queryParam()).
-		Send().
+		Execute().
 		Read(newResponse(member)).
 		Error
 }
@@ -161,11 +154,10 @@ func (api api) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 // https://core.telegram.org/bots/api#answercallbackquery
 func (api api) AnswerCallbackQuery(id string, options *AnswerCallbackQueryOptions) (bool, error) {
 	var r bool
-	return r, api.http.NewRequest().
-		POST().
-		Resource(api.method("/answerCallbackQuery")).
+	return r, api.http.
+		POST(api.method("/answerCallbackQuery")).
 		Body(options.body(id)).
-		Send().
+		Execute().
 		Read(newResponse(&r)).
 		Error
 }
