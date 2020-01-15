@@ -58,6 +58,8 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 			log.Printf("Too many messages, sleeping for %s...", err.RetryAfter)
 			time.Sleep(err.RetryAfter)
 			continue
+		case Error:
+			return err
 		default:
 			time.Sleep(GatewaySendDelay)
 		}
