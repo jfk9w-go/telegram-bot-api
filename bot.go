@@ -31,7 +31,10 @@ func (o *GetUpdatesOptions) body() flu.BodyWriter {
 	return flu.JSON(o)
 }
 
-var DefaultUpdateOptions = &GetUpdatesOptions{TimeoutSecs: 60}
+var (
+	DefaultUpdateOptions = &GetUpdatesOptions{TimeoutSecs: 60}
+	MaxSendRetries       = 3
+)
 
 type Bot struct {
 	Client
@@ -40,7 +43,7 @@ type Bot struct {
 
 func NewBot(http *flu.Client, token string) Bot {
 	api := newApi(http, token)
-	client := newClient(api, 3)
+	client := newClient(api, MaxSendRetries)
 	return Bot{Client: client, options: &(*DefaultUpdateOptions)}
 }
 
