@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jfk9w-go/flu"
 	"github.com/pkg/errors"
 )
 
@@ -14,8 +15,8 @@ type Client = *floodControlAwareClient
 type floodControlAwareClient struct {
 	api
 	maxRetries int
-	gateway    Restraint
-	recipients map[ChatID]Restraint
+	gateway    flu.Restraint
+	recipients map[ChatID]flu.Restraint
 	mutex      sync.RWMutex
 }
 
@@ -23,8 +24,8 @@ func newClient(api api, maxRetries int) Client {
 	return &floodControlAwareClient{
 		api:        api,
 		maxRetries: maxRetries,
-		gateway:    NewIntervalRestraint(GatewaySendDelay),
-		recipients: make(map[ChatID]Restraint),
+		gateway:    flu.NewIntervalRestraint(GatewaySendDelay),
+		recipients: make(map[ChatID]flu.Restraint),
 	}
 }
 
@@ -70,7 +71,7 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 func (c *floodControlAwareClient) newRecipient(chat *Chat) {
 	c.mutex.Lock()
 	if _, ok := c.recipients[chat.ID]; !ok {
-		restraint := NewIntervalRestraint(SendDelays[chat.Type])
+		restraint := flu.NewIntervalRestraint(SendDelays[chat.Type])
 		c.recipients[chat.ID] = restraint
 		if chat.Username != nil {
 			c.recipients[*chat.Username] = restraint

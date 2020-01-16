@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/jfk9w-go/flu"
-	"github.com/pkg/errors"
 )
 
 type sendable interface {
@@ -46,7 +45,6 @@ const (
 
 type Media struct {
 	Type      MediaType    `url:"-" json:"type"`
-	URL       string       `url:"-" json:"-"`
 	Resource  flu.Readable `url:"-" json:"-"`
 	Caption   string       `url:"caption,omitempty" json:"caption,omitempty"`
 	ParseMode ParseMode    `url:"parse_mode,omitempty" json:"parse_mode,omitempty"`
@@ -57,12 +55,12 @@ func (m *Media) kind() string {
 }
 
 func (m *Media) body(form flu.Form) (flu.BodyWriter, error) {
-	if m.Resource != nil {
+	switch r := m.Resource.(type) {
+	case flu.URL:
+		return form.Set(m.Type, r.URL()), nil
+	default:
 		return form.Multipart().File(m.Type, m.Resource), nil
-	} else if m.URL != "" {
-		return form.Set(m.Type, m.URL), nil
 	}
-	return nil, errors.New("no URL or resource specified")
 }
 
 func (m *Media) self() Sendable {
@@ -80,15 +78,16 @@ func (mg MediaGroup) kind() string {
 	return "mediaGroup"
 }
 
-var ErrNoURLOrResource = errors.New("no URL or resource specified")
-
 func (mg MediaGroup) body(form flu.Form) (flu.BodyWriter, error) {
 	var multipart flu.MultipartForm
 	multipartInitialized := false
 	media := make([]mediaJSON, len(mg))
 	for i, m := range mg {
 		m := mediaJSON{m, ""}
-		if m.Resource != nil {
+		switch r := m.Resource.(type) {
+		case flu.URL:
+			m.MediaURL = r.URL()
+		default:
 			if !multipartInitialized {
 				multipart = form.Multipart()
 				multipartInitialized = true
@@ -96,10 +95,6 @@ func (mg MediaGroup) body(form flu.Form) (flu.BodyWriter, error) {
 			id := "media" + strconv.Itoa(i)
 			multipart.File(id, m.Resource)
 			m.MediaURL = "attach://" + id
-		} else if m.URL != "" {
-			m.MediaURL = m.URL
-		} else {
-			return nil, ErrNoURLOrResource
 		}
 		media[i] = m
 	}
