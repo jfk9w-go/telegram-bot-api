@@ -43,8 +43,9 @@ type Bot struct {
 
 func NewBot(http *flu.Client, token string) Bot {
 	api := newApi(http, token)
-	client := newClient(api, MaxSendRetries)
-	return Bot{Client: client, options: &(*DefaultUpdateOptions)}
+	fca := newFloodControlAwareClient(api, MaxSendRetries)
+	c := newConversationAwareClient(fca)
+	return Bot{Client: c, options: &(*DefaultUpdateOptions)}
 }
 
 func (u Bot) Listen(concurrency int, listener UpdateListener) {

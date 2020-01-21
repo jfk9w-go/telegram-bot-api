@@ -108,11 +108,20 @@ type (
 		self() ReplyMarkup
 	}
 
+	ForceReply struct {
+		ForceReply bool `json:"force_reply,omitempty"`
+		Selective  bool `json:"selective,omitempty"`
+	}
+
 	// https://core.telegram.org/bots/api#inlinekeyboardmarkup
 	InlineKeyboardMarkup struct {
 		InlineKeyboard [][]InlineKeyboardButton `json:"inline_keyboard"`
 	}
 )
+
+func (r ForceReply) self() ReplyMarkup {
+	return r
+}
 
 func (m InlineKeyboardMarkup) self() ReplyMarkup {
 	return m

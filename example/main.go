@@ -118,5 +118,20 @@ func main() {
 			}).
 			HandleFunc("say", func(tg telegram.Client, cmd *telegram.Command) error {
 				return cmd.Reply(tg, cmd.Payload)
+			}).
+			HandleFunc("/question", func(tg telegram.Client, cmd *telegram.Command) error {
+				reply, err := tg.Ask(cmd.Chat.ID,
+					&telegram.Text{Text: "Your question is, " + cmd.Payload},
+					&telegram.SendOptions{ReplyToMessageID: cmd.Message.ID})
+				if err != nil {
+					return cmd.Reply(tg, err.Error())
+				}
+				_, err = tg.Send(reply.Chat.ID,
+					&telegram.Text{Text: "Your answer is, " + reply.Text},
+					&telegram.SendOptions{ReplyToMessageID: reply.ID})
+				if err != nil {
+					return cmd.Reply(tg, err.Error())
+				}
+				return nil
 			}))
 }

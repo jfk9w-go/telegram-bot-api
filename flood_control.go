@@ -10,8 +10,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Client = *floodControlAwareClient
-
 type floodControlAwareClient struct {
 	api
 	maxRetries int
@@ -20,7 +18,7 @@ type floodControlAwareClient struct {
 	mutex      sync.RWMutex
 }
 
-func newClient(api api, maxRetries int) Client {
+func newFloodControlAwareClient(api api, maxRetries int) *floodControlAwareClient {
 	return &floodControlAwareClient{
 		api:        api,
 		maxRetries: maxRetries,

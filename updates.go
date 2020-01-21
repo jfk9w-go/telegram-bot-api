@@ -43,6 +43,9 @@ func (l *CommandListener) HandleFunc(key string, handler CommandHandlerFunc) *Co
 }
 
 func (l *CommandListener) ReceiveUpdate(client Client, update Update) error {
+	if update.Message != nil && client.Answer(update.Message) {
+		return nil
+	}
 	cmd := l.extractCommand(update)
 	if cmd == nil {
 		return nil
