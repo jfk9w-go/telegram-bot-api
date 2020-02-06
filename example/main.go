@@ -12,7 +12,6 @@ import (
 
 	"github.com/jfk9w-go/flu"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
-	"github.com/pkg/errors"
 )
 
 // This is an example bot which has three commands:
@@ -68,11 +67,8 @@ func main() {
 			}).
 			HandleFunc("/count", func(tg telegram.Client, cmd *telegram.Command) error {
 				limit, err := strconv.Atoi(cmd.Payload)
-				if err == nil && limit <= 0 {
-					err = errors.New("limit must be positive")
-				}
-				if err != nil {
-					return cmd.Reply(tg, err.Error())
+				if err != nil || limit <= 0 {
+					return cmd.Reply(tg, "limit must be a positive integer")
 				}
 				for i := 1; i <= limit; i++ {
 					_, err := tg.Send(cmd.Chat.ID, &telegram.Text{Text: fmt.Sprintf("%d", i)}, nil)
@@ -88,11 +84,8 @@ func main() {
 					return cmd.Reply(tg, "usage: /secret Hi 5")
 				}
 				secs, err := strconv.Atoi(fields[1])
-				if err == nil && secs <= 0 {
-					err = errors.New("secs must be positive")
-				}
-				if err != nil {
-					return cmd.Reply(tg, err.Error())
+				if err != nil || secs <= 0 {
+					return cmd.Reply(tg, "secs must be a positive integer")
 				}
 				timeout := time.Duration(secs) * time.Second
 				m, err := tg.Send(cmd.Chat.ID, &telegram.Text{Text: fields[0]}, nil)
