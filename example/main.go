@@ -105,8 +105,10 @@ func main() {
 					&telegram.Text{Text: "Here you go."},
 					&telegram.SendOptions{
 						ReplyMarkup: telegram.InlineKeyboard(
-							"Say "+cmd.Payload, "say", cmd.Payload,
-							"Another button", "", "")})
+							[][3]string{
+								{"Say " + cmd.Payload, "say", cmd.Payload},
+								{"Another button", "", ""}}),
+					})
 				return err
 			}).
 			HandleFunc("say", func(tg telegram.Client, cmd *telegram.Command) error {

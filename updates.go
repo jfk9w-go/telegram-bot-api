@@ -114,19 +114,17 @@ func (l *CommandListener) extractCommandCallbackQuery(query *CallbackQuery) *Com
 	return nil
 }
 
-func InlineKeyboard(triples ...string) ReplyMarkup {
-	if len(triples)%3 != 0 {
-		panic(errors.Errorf("triples has length of %d which is not a multiple of 3", len(triples)))
+func InlineKeyboard(rows ...[][3]string) ReplyMarkup {
+	keyboard := make([][]InlineKeyboardButton, len(rows))
+	for i, row := range rows {
+		for j, button := range row {
+			keyboard[i][j] = InlineKeyboardButton{
+				Text:         button[0],
+				CallbackData: button[1] + ":" + button[2],
+			}
+		}
 	}
-	realLength := len(triples) / 3
-	buttons := make([][]InlineKeyboardButton, realLength)
-	for i := 0; i < realLength; i++ {
-		buttons[i] = []InlineKeyboardButton{{
-			Text:         triples[3*i],
-			CallbackData: triples[3*i+1] + ":" + triples[3*i+2],
-		}}
-	}
-	return &InlineKeyboardMarkup{buttons}
+	return &InlineKeyboardMarkup{keyboard}
 }
 
 // Command is a text bot command.
