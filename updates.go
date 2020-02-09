@@ -117,6 +117,7 @@ func (l *CommandListener) extractCommandCallbackQuery(query *CallbackQuery) *Com
 func InlineKeyboard(rows ...[][3]string) ReplyMarkup {
 	keyboard := make([][]InlineKeyboardButton, len(rows))
 	for i, row := range rows {
+		keyboard[i] = make([]InlineKeyboardButton, len(row))
 		for j, button := range row {
 			keyboard[i][j] = InlineKeyboardButton{
 				Text:         button[0],
