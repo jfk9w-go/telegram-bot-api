@@ -43,14 +43,14 @@ func newApi(http *flu.Client, token string) api {
 	}
 }
 
-// Use this method to receive incoming updates using long polling.
+// Use this method to receive incoming Updates using long polling.
 // An Array of Update objects is returned.
 // See https://core.telegram.org/bots/api#getupdates
 func (api api) GetUpdates(ctx context.Context, options GetUpdatesOptions) ([]Update, error) {
 	updates := make([]Update, 0)
 	return updates, api.http.
 		POST(api.method("/getUpdates")).
-		Body(options.body()).
+		Body(flu.JSON(options)).
 		Context(ctx).
 		Execute().
 		Decode(newResponse(&updates)).

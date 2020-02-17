@@ -15,7 +15,7 @@ type UpdateListener interface {
 }
 
 // CommandListener is a UpdateListener handling incoming bot commands
-// with message and edited_message allowed updates.
+// with message and edited_message allowed Updates.
 type CommandListener struct {
 	handlers map[string]CommandHandler
 	username string

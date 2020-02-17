@@ -46,22 +46,18 @@ func (c *conversationAwareClient) Ask(ctx context.Context, chatID ChatID, sendab
 	}
 }
 
-func (c *conversationAwareClient) Answer(ctx context.Context, message *Message) error {
+func (c *conversationAwareClient) Answer(message *Message) bool {
 	if message.ReplyToMessage != nil {
 		c.mutex.RLock()
 		question, ok := c.questions[message.ReplyToMessage.ID]
 		c.mutex.RUnlock()
 		if ok {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case question <- message:
-				return nil
-			}
+			question <- message
+			return true
 		}
 	}
 
-	return nil
+	return false
 }
 
 func (c *conversationAwareClient) addQuestion(id ID) Question {

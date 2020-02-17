@@ -46,7 +46,7 @@ const (
 	Voice    MediaType = "voice"
 )
 
-func (mt MediaType) MaxLinkSize() int64 {
+func (mt MediaType) RemoteMaxSize() int64 {
 	if mt == Photo {
 		return 5 << 20
 	} else {
@@ -54,7 +54,7 @@ func (mt MediaType) MaxLinkSize() int64 {
 	}
 }
 
-func (mt MediaType) MaxAttachSize() int64 {
+func (mt MediaType) AttachMaxSize() int64 {
 	if mt == Photo {
 		return 10 << 20
 	} else {

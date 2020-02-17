@@ -38,11 +38,11 @@ func main() {
 	bot := telegram.NewBot(flu.NewTransport().
 		ResponseHeaderTimeout(2*time.Minute).
 		ProxyURL(proxy).
-		NewClient(), os.Args[1])
+		NewClient(), os.Args[1], 3)
 
 	// Listen to the commands.
 	ctx, cancel := context.WithCancel(context.Background())
-	go bot.Listen(ctx, 2, telegram.NewCommandListener(os.Args[2]).
+	go bot.Listen(ctx, nil, telegram.NewCommandListener(os.Args[2]).
 		HandleFunc("/greet", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
 			_, err := tg.Send(ctx, cmd.Chat.ID,
 				telegram.Text{Text: "Hello, " + cmd.User.FirstName},
