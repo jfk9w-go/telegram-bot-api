@@ -143,7 +143,7 @@ func (c *Command) Reply(client Client, text string) error {
 		_, err := client.AnswerCallbackQuery(c.CallbackQueryID, &AnswerCallbackQueryOptions{Text: text})
 		return err
 	} else {
-		_, err := client.Send(c.Chat.ID, &Text{Text: text}, &SendOptions{ReplyToMessageID: c.Message.ID})
+		_, err := client.Send(c.Chat.ID, Text{Text: text}, &SendOptions{ReplyToMessageID: c.Message.ID})
 		return err
 	}
 }

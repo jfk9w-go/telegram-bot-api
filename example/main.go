@@ -40,29 +40,50 @@ func main() {
 		Listen(2, telegram.NewCommandListener(os.Args[2]).
 			HandleFunc("/greet", func(tg telegram.Client, cmd *telegram.Command) error {
 				_, err := tg.Send(cmd.Chat.ID,
-					&telegram.Text{Text: "Hello, " + cmd.User.FirstName},
+					telegram.Text{Text: "Hello, " + cmd.User.FirstName},
 					&telegram.SendOptions{ReplyToMessageID: cmd.Message.ID})
 				return err
 			}).
 			HandleFunc("/tick", func(tg telegram.Client, cmd *telegram.Command) error {
 				_, err := tg.Send(cmd.Chat.ID,
-					&telegram.Media{
-						Type:      telegram.Photo,
+					telegram.Media{
+						Type:      telegram.MediaTypeByMIMEType("image/jpeg"),
 						Resource:  flu.File("tick.png"),
 						Caption:   "Here's a <b>tick</b> for ya.",
 						ParseMode: telegram.HTML},
 					&telegram.SendOptions{DisableNotification: true})
 				return err
 			}).
-			HandleFunc("/ticks", func(tg telegram.Client, c *telegram.Command) error {
+			HandleFunc("/ticks", func(tg telegram.Client, cmd *telegram.Command) error {
 				media := make([]telegram.Media, 4)
 				for i := range media {
 					media[i] = telegram.Media{
-						Type:     telegram.Photo,
+						Type:     telegram.MediaTypeByMIMEType("image/jpeg"),
 						Resource: flu.File("tick.png"),
 						Caption:  "Image " + strconv.Itoa(i)}
 				}
-				_, err := tg.SendMediaGroup(c.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
+				_, err := tg.SendMediaGroup(cmd.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
+				return err
+			}).
+			HandleFunc("/gifs", func(tg telegram.Client, cmd *telegram.Command) error {
+				media := make([]telegram.Media, 4)
+				for i := range media {
+					media[i] = telegram.Media{
+						Type:     telegram.MediaTypeByMIMEType("image/gif"),
+						Resource: flu.File("gif.gif"),
+						Caption:  "GIF " + strconv.Itoa(i),
+					}
+				}
+				_, err := tg.SendMediaGroup(cmd.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
+				return err
+			}).
+			HandleFunc("/webp", func(tg telegram.Client, cmd *telegram.Command) error {
+				_, err := tg.Send(cmd.Chat.ID,
+					telegram.Media{
+						Type:     telegram.MediaTypeByMIMEType("image/webp"),
+						Resource: flu.File("webp.webp"),
+					},
+					&telegram.SendOptions{DisableNotification: true})
 				return err
 			}).
 			HandleFunc("/count", func(tg telegram.Client, cmd *telegram.Command) error {
@@ -71,7 +92,7 @@ func main() {
 					return cmd.Reply(tg, "limit must be a positive integer")
 				}
 				for i := 1; i <= limit; i++ {
-					_, err := tg.Send(cmd.Chat.ID, &telegram.Text{Text: fmt.Sprintf("%d", i)}, nil)
+					_, err := tg.Send(cmd.Chat.ID, telegram.Text{Text: fmt.Sprintf("%d", i)}, nil)
 					if err != nil {
 						return err
 					}
@@ -88,7 +109,7 @@ func main() {
 					return cmd.Reply(tg, "secs must be a positive integer")
 				}
 				timeout := time.Duration(secs) * time.Second
-				m, err := tg.Send(cmd.Chat.ID, &telegram.Text{Text: fields[0]}, nil)
+				m, err := tg.Send(cmd.Chat.ID, telegram.Text{Text: fields[0]}, nil)
 				if err != nil {
 					return err
 				}
@@ -102,7 +123,7 @@ func main() {
 					return cmd.Reply(tg, "Please specify a message")
 				}
 				_, err := tg.Send(cmd.Chat.ID,
-					&telegram.Text{Text: "Here you go."},
+					telegram.Text{Text: "Here you go."},
 					&telegram.SendOptions{
 						ReplyMarkup: telegram.InlineKeyboard(
 							[][3]string{
@@ -116,13 +137,13 @@ func main() {
 			}).
 			HandleFunc("/question", func(tg telegram.Client, cmd *telegram.Command) error {
 				reply, err := tg.Ask(cmd.Chat.ID,
-					&telegram.Text{Text: "Your question is, " + cmd.Payload},
+					telegram.Text{Text: "Your question is, " + cmd.Payload},
 					&telegram.SendOptions{ReplyToMessageID: cmd.Message.ID})
 				if err != nil {
 					return cmd.Reply(tg, err.Error())
 				}
 				_, err = tg.Send(reply.Chat.ID,
-					&telegram.Text{Text: "Your answer is, " + reply.Text},
+					telegram.Text{Text: "Your answer is, " + reply.Text},
 					&telegram.SendOptions{ReplyToMessageID: reply.ID})
 				if err != nil {
 					return cmd.Reply(tg, err.Error())
