@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/jfk9w-go/flu"
 )
 
@@ -41,7 +43,7 @@ var (
 type Bot struct {
 	Client
 	options GetUpdatesOptions
-	halt    chan bool
+	cancel  context.CancelFunc
 	work    sync.WaitGroup
 }
 
@@ -52,7 +54,6 @@ func NewBot(http *flu.Client, token string) *Bot {
 	return &Bot{
 		Client:  c,
 		options: DefaultUpdateOptions,
-		halt:    make(chan bool),
 	}
 }
 
@@ -77,46 +78,36 @@ func (bot *Bot) Listen(concurrency int, listener UpdateListener) {
 		}()
 	}
 
-	done := make(chan bool)
+	ctx, cancel := context.WithCancel(context.Background())
+	bot.cancel = cancel
 	for {
-		var (
-			ctx, cancel = context.WithCancel(context.Background())
-			updates     []Update
-			err         error
-		)
-
-		go func() {
-			updates, err = bot.GetUpdates(ctx, bot.options)
-			done <- true
-		}()
-
-		select {
-		case <-bot.halt:
-			cancel()
+		updates, err := bot.GetUpdates(ctx, bot.options)
+		switch {
+		case errors.Is(err, context.Canceled):
 			close(channel)
 			return
+		case err != nil:
+			log.Printf("Telegram bot poll error: %s", err)
+			time.Sleep(time.Duration(bot.options.TimeoutSecs) * time.Second)
+			continue
+		}
 
-		case <-done:
-			if err != nil {
-				log.Printf("Telegram bot poll error: %s", err)
-				time.Sleep(time.Duration(bot.options.TimeoutSecs) * time.Second)
+		for _, update := range updates {
+			if update.Message != nil && bot.Answer(update.Message) {
 				continue
 			}
 
-			for _, update := range updates {
-				if update.Message != nil && bot.Answer(update.Message) {
-					continue
-				}
-
-				channel <- update
-				bot.options.Offset = update.ID.Increment()
-			}
+			channel <- update
+			bot.options.Offset = update.ID.Increment()
 		}
 	}
 }
 
 func (bot *Bot) Close() error {
-	bot.halt <- true
-	bot.work.Wait()
+	if bot.cancel != nil {
+		bot.cancel()
+		bot.work.Wait()
+	}
+
 	return nil
 }
