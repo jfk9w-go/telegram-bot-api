@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -45,13 +46,14 @@ func newApi(http *flu.Client, token string) api {
 // Use this method to receive incoming updates using long polling.
 // An Array of Update objects is returned.
 // See https://core.telegram.org/bots/api#getupdates
-func (api api) GetUpdates(options *GetUpdatesOptions) ([]Update, error) {
+func (api api) GetUpdates(ctx context.Context, options GetUpdatesOptions) ([]Update, error) {
 	updates := make([]Update, 0)
 	return updates, api.http.
 		POST(api.method("/getUpdates")).
 		Body(options.body()).
+		Context(ctx).
 		Execute().
-		Read(newResponse(&updates)).
+		Decode(newResponse(&updates)).
 		Error
 }
 
@@ -63,7 +65,7 @@ func (api api) GetMe() (*User, error) {
 	return user, api.http.
 		GET(api.method("/getMe")).
 		Execute().
-		Read(newResponse(user)).
+		Decode(newResponse(user)).
 		Error
 }
 
@@ -76,12 +78,12 @@ func (api api) GetMe() (*User, error) {
 //   https://core.telegram.org/bots/api#sendvideo
 //   https://core.telegram.org/bots/api#senddocument
 //   https://core.telegram.org/bots/api#sendmediagroup
-func (api api) send(url string, body flu.BodyWriter, resp interface{}) error {
+func (api api) send(url string, body flu.BodyEncoderTo, resp interface{}) error {
 	return api.http.
 		POST(url).
 		Body(body).
 		Execute().
-		Read(newResponse(resp)).
+		Decode(newResponse(resp)).
 		Error
 }
 
@@ -101,7 +103,7 @@ func (api api) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("message_id", messageID.queryParam()).
 		Execute().
-		Read(newResponse(&r)).
+		Decode(newResponse(&r)).
 		Error
 }
 
@@ -115,7 +117,7 @@ func (api api) GetChat(chatID ChatID) (*Chat, error) {
 		GET(api.method("/getChat")).
 		QueryParam("chat_id", chatID.queryParam()).
 		Execute().
-		Read(newResponse(chat)).
+		Decode(newResponse(chat)).
 		Error
 }
 
@@ -130,7 +132,7 @@ func (api api) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 		GET(api.method("/getChatAdministrators")).
 		QueryParam("chat_id", chatID.queryParam()).
 		Execute().
-		Read(newResponse(&members)).
+		Decode(newResponse(&members)).
 		Error
 }
 
@@ -144,7 +146,7 @@ func (api api) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("user_id", userID.queryParam()).
 		Execute().
-		Read(newResponse(member)).
+		Decode(newResponse(member)).
 		Error
 }
 
@@ -158,7 +160,7 @@ func (api api) AnswerCallbackQuery(id string, options *AnswerCallbackQueryOption
 		POST(api.method("/answerCallbackQuery")).
 		Body(options.body(id)).
 		Execute().
-		Read(newResponse(&r)).
+		Decode(newResponse(&r)).
 		Error
 }
 

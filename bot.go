@@ -1,7 +1,9 @@
 package telegram
 
 import (
+	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/jfk9w-go/flu"
@@ -27,54 +29,94 @@ type GetUpdatesOptions struct {
 	AllowedUpdates []string `json:"allowed_updates,omitempty"`
 }
 
-func (o *GetUpdatesOptions) body() flu.BodyWriter {
+func (o GetUpdatesOptions) body() flu.BodyEncoderTo {
 	return flu.JSON(o)
 }
 
 var (
-	DefaultUpdateOptions = &GetUpdatesOptions{TimeoutSecs: 60}
+	DefaultUpdateOptions = GetUpdatesOptions{TimeoutSecs: 60}
 	MaxSendRetries       = 3
 )
 
 type Bot struct {
 	Client
-	options *GetUpdatesOptions
+	options GetUpdatesOptions
+	halt    chan bool
+	work    sync.WaitGroup
 }
 
-func NewBot(http *flu.Client, token string) Bot {
+func NewBot(http *flu.Client, token string) *Bot {
 	api := newApi(http, token)
 	fca := newFloodControlAwareClient(api, MaxSendRetries)
 	c := newConversationAwareClient(fca)
-	return Bot{Client: c, options: &(*DefaultUpdateOptions)}
+	return &Bot{
+		Client:  c,
+		options: DefaultUpdateOptions,
+		halt:    make(chan bool),
+	}
 }
 
-func (u Bot) Listen(concurrency int, listener UpdateListener) {
-	u.options.AllowedUpdates = listener.AllowedUpdates()
-	log.Printf("Listening for the following updates: %v", u.options.AllowedUpdates)
+func (bot *Bot) Listen(concurrency int, listener UpdateListener) {
+	bot.options.AllowedUpdates = listener.AllowedUpdates()
+	log.Printf("Listening for the following updates: %v", bot.options.AllowedUpdates)
 	channel := make(chan Update)
 	if concurrency < 1 {
 		concurrency = 1
 	}
+
+	bot.work.Add(concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func() {
+			defer bot.work.Done()
 			for update := range channel {
-				err := listener.ReceiveUpdate(u.Client, update)
+				err := listener.ReceiveUpdate(bot.Client, update)
 				if err != nil {
-					log.Printf("Failed to process update %d: %v", update.ID, err)
+					log.Printf("Failed to process update %d: %s", update.ID, err)
 				}
 			}
 		}()
 	}
+
+	done := make(chan bool)
 	for {
-		updates, err := u.GetUpdates(u.options)
-		if err == nil {
-			for _, update := range updates {
-				channel <- update
-				u.options.Offset = update.ID.Increment()
+		var (
+			ctx, cancel = context.WithCancel(context.Background())
+			updates     []Update
+			err         error
+		)
+
+		go func() {
+			updates, err = bot.GetUpdates(ctx, bot.options)
+			done <- true
+		}()
+
+		select {
+		case <-bot.halt:
+			cancel()
+			close(channel)
+			return
+
+		case <-done:
+			if err != nil {
+				log.Printf("Telegram bot poll error: %s", err)
+				time.Sleep(time.Duration(bot.options.TimeoutSecs) * time.Second)
+				continue
 			}
-			continue
+
+			for _, update := range updates {
+				if update.Message != nil && bot.Answer(update.Message) {
+					continue
+				}
+
+				channel <- update
+				bot.options.Offset = update.ID.Increment()
+			}
 		}
-		log.Printf("Poll error: %v", err)
-		time.Sleep(time.Duration(u.options.TimeoutSecs) * time.Second)
 	}
+}
+
+func (bot *Bot) Close() error {
+	bot.halt <- true
+	bot.work.Wait()
+	return nil
 }

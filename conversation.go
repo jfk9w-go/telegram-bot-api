@@ -33,19 +33,23 @@ func (c *conversationAwareClient) Ask(chatID ChatID, sendable Sendable, options 
 	if options == nil {
 		options = new(SendOptions)
 	}
+
 	options.ReplyMarkup = ForceReply{ForceReply: true, Selective: true}
 	m, err := c.Send(chatID, sendable, options)
 	if err != nil {
 		return nil, errors.Wrap(err, "send question")
 	}
+
 	question := c.addQuestion(m.ID)
 	defer c.removeQuestion(m.ID)
+
 	select {
 	case answer := <-question:
 		return answer, nil
 	case <-time.After(AnswerTimeout):
 
 	}
+
 	return nil, ErrReplyTimeout
 }
 
@@ -59,6 +63,7 @@ func (c *conversationAwareClient) Answer(message *Message) bool {
 			return true
 		}
 	}
+
 	return false
 }
 

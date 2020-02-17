@@ -9,7 +9,7 @@ import (
 
 type sendable interface {
 	kind() string
-	body(flu.Form) (flu.BodyWriter, error)
+	body(flu.Form) (flu.BodyEncoderTo, error)
 }
 
 type Sendable interface {
@@ -27,7 +27,7 @@ func (t Text) kind() string {
 	return "message"
 }
 
-func (t Text) body(body flu.Form) (flu.BodyWriter, error) {
+func (t Text) body(body flu.Form) (flu.BodyEncoderTo, error) {
 	return body, nil
 }
 
@@ -97,7 +97,7 @@ func (m Media) kind() string {
 	return string(m.Type)
 }
 
-func (m Media) body(form flu.Form) (flu.BodyWriter, error) {
+func (m Media) body(form flu.Form) (flu.BodyEncoderTo, error) {
 	switch r := m.Resource.(type) {
 	case flu.URL:
 		return form.Set(string(m.Type), r.URL()), nil
@@ -121,7 +121,7 @@ func (mg MediaGroup) kind() string {
 	return "mediaGroup"
 }
 
-func (mg MediaGroup) body(form flu.Form) (flu.BodyWriter, error) {
+func (mg MediaGroup) body(form flu.Form) (flu.BodyEncoderTo, error) {
 	var multipart flu.MultipartForm
 	multipartInitialized := false
 	media := make([]mediaJSON, len(mg))

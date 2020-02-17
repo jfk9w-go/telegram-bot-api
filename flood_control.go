@@ -13,8 +13,8 @@ import (
 type floodControlAwareClient struct {
 	api
 	maxRetries int
-	gateway    flu.Restraint
-	recipients map[ChatID]flu.Restraint
+	limiter    flu.Limiter
+	recipients map[ChatID]flu.Limiter
 	mutex      sync.RWMutex
 }
 
@@ -22,8 +22,8 @@ func newFloodControlAwareClient(api api, maxRetries int) *floodControlAwareClien
 	return &floodControlAwareClient{
 		api:        api,
 		maxRetries: maxRetries,
-		gateway:    flu.NewIntervalRestraint(GatewaySendDelay),
-		recipients: make(map[ChatID]flu.Restraint),
+		limiter:    flu.IntervalLimiter(GatewaySendDelay),
+		recipients: make(map[ChatID]flu.Limiter),
 	}
 }
 
@@ -36,14 +36,14 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 	}
 	url := c.method("/send" + strings.Title(item.kind()))
 	c.mutex.RLock()
-	rec, exists := c.recipients[chatID]
+	limiter, exists := c.recipients[chatID]
 	c.mutex.RUnlock()
 	if exists {
-		rec.Start()
-		defer rec.Complete()
+		limiter.Start()
+		defer limiter.Complete()
 	}
-	c.gateway.Start()
-	defer c.gateway.Complete()
+	c.limiter.Start()
+	defer c.limiter.Complete()
 	for i := 0; i <= c.maxRetries; i++ {
 		err = c.api.send(url, body, resp)
 		switch err := err.(type) {
@@ -69,10 +69,10 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 func (c *floodControlAwareClient) newRecipient(chat *Chat) {
 	c.mutex.Lock()
 	if _, ok := c.recipients[chat.ID]; !ok {
-		restraint := flu.NewIntervalRestraint(SendDelays[chat.Type])
-		c.recipients[chat.ID] = restraint
+		limiter := flu.IntervalLimiter(SendDelays[chat.Type])
+		c.recipients[chat.ID] = limiter
 		if chat.Username != nil {
-			c.recipients[*chat.Username] = restraint
+			c.recipients[*chat.Username] = limiter
 		}
 	}
 	c.mutex.Unlock()
@@ -84,6 +84,9 @@ func (c *floodControlAwareClient) newRecipient(chat *Chat) {
 //   https://core.telegram.org/bots/api#sendphoto
 //   https://core.telegram.org/bots/api#sendvideo
 //   https://core.telegram.org/bots/api#senddocument
+//   https://core.telegram.org/bots/api#sendaudio
+//   https://core.telegram.org/bots/api#sendvoice
+//   https://core.telegram.org/bots/api#sendsticker
 func (c *floodControlAwareClient) Send(chatID ChatID, item Sendable, options *SendOptions) (*Message, error) {
 	m := new(Message)
 	err := c.send(chatID, item, options, m)

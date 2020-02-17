@@ -25,7 +25,7 @@ type SendOptions struct {
 	ReplyMarkup         ReplyMarkup
 }
 
-func (o *SendOptions) body(chatID ChatID, item sendable) (flu.BodyWriter, error) {
+func (o *SendOptions) body(chatID ChatID, item sendable) (flu.BodyEncoderTo, error) {
 	isMediaGroup := item.kind() == "mediaGroup"
 	var form flu.Form
 	if isMediaGroup {
@@ -33,14 +33,17 @@ func (o *SendOptions) body(chatID ChatID, item sendable) (flu.BodyWriter, error)
 	} else {
 		form = flu.FormValue(item, true)
 	}
+
 	form.Set("chat_id", chatID.queryParam())
 	if o != nil {
 		if o.DisableNotification {
 			form.Set("disable_notification", "1")
 		}
+
 		if o.ReplyToMessageID != 0 {
 			form.Set("reply_to_message_id", o.ReplyToMessageID.queryParam())
 		}
+
 		if !isMediaGroup && o.ReplyMarkup != nil {
 			bytes, err := json.Marshal(o.ReplyMarkup)
 			if err != nil {
@@ -50,6 +53,7 @@ func (o *SendOptions) body(chatID ChatID, item sendable) (flu.BodyWriter, error)
 			form.Set("reply_markup", string(bytes))
 		}
 	}
+
 	return item.body(form)
 }
 
@@ -60,6 +64,6 @@ type AnswerCallbackQueryOptions struct {
 	CacheTime int    `url:"cache_time,omitempty"`
 }
 
-func (o *AnswerCallbackQueryOptions) body(id string) flu.BodyWriter {
+func (o *AnswerCallbackQueryOptions) body(id string) flu.BodyEncoderTo {
 	return flu.FormValue(o, true).Add("callback_query_id", id)
 }
