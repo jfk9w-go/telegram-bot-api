@@ -60,10 +60,11 @@ func (api api) GetUpdates(ctx context.Context, options GetUpdatesOptions) ([]Upd
 // A simple method for testing your bot's auth token. Requires no parameters.
 // Returns basic information about the bot in form of a User object.
 // See https://core.telegram.org/bots/api#getme
-func (api api) GetMe() (*User, error) {
+func (api api) GetMe(ctx context.Context) (*User, error) {
 	user := new(User)
 	return user, api.http.
 		GET(api.method("/getMe")).
+		Context(ctx).
 		Execute().
 		Decode(newResponse(user)).
 		Error
@@ -78,10 +79,11 @@ func (api api) GetMe() (*User, error) {
 //   https://core.telegram.org/bots/api#sendvideo
 //   https://core.telegram.org/bots/api#senddocument
 //   https://core.telegram.org/bots/api#sendmediagroup
-func (api api) send(url string, body flu.BodyEncoderTo, resp interface{}) error {
+func (api api) send(ctx context.Context, url string, body flu.BodyEncoderTo, resp interface{}) error {
 	return api.http.
 		POST(url).
 		Body(body).
+		Context(ctx).
 		Execute().
 		Decode(newResponse(resp)).
 		Error
@@ -96,12 +98,13 @@ func (api api) send(url string, body flu.BodyEncoderTo, resp interface{}) error 
 // Returns True on success.
 // See
 //    https://core.telegram.org/bots/api#deletemessage
-func (api api) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
+func (api api) DeleteMessage(ctx context.Context, chatID ChatID, messageID ID) (bool, error) {
 	var r bool
 	return r, api.http.
 		GET(api.method("/deleteMessage")).
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("message_id", messageID.queryParam()).
+		Context(ctx).
 		Execute().
 		Decode(newResponse(&r)).
 		Error
@@ -111,11 +114,12 @@ func (api api) DeleteMessage(chatID ChatID, messageID ID) (bool, error) {
 // the user for one-on-one conversations, current username of a user, group or updateChannel, etc.).
 // Returns a Chat object on success.
 // See https://core.telegram.org/bots/api#getchat
-func (api api) GetChat(chatID ChatID) (*Chat, error) {
+func (api api) GetChat(ctx context.Context, chatID ChatID) (*Chat, error) {
 	chat := new(Chat)
 	return chat, api.http.
 		GET(api.method("/getChat")).
 		QueryParam("chat_id", chatID.queryParam()).
+		Context(ctx).
 		Execute().
 		Decode(newResponse(chat)).
 		Error
@@ -126,11 +130,12 @@ func (api api) GetChat(chatID ChatID) (*Chat, error) {
 // all chat administrators except other bots. If the chat is a group or a supergroup and
 // no administrators were appointed, only the creator will be returned.
 // See https://core.telegram.org/bots/api#getchatadministrators
-func (api api) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
+func (api api) GetChatAdministrators(ctx context.Context, chatID ChatID) ([]ChatMember, error) {
 	members := make([]ChatMember, 0)
 	return members, api.http.
 		GET(api.method("/getChatAdministrators")).
 		QueryParam("chat_id", chatID.queryParam()).
+		Context(ctx).
 		Execute().
 		Decode(newResponse(&members)).
 		Error
@@ -139,12 +144,13 @@ func (api api) GetChatAdministrators(chatID ChatID) ([]ChatMember, error) {
 // Use this method to get information about a member of a chat.
 // Returns a ChatMember object on success.
 // See https://core.telegram.org/bots/api#getchatmember
-func (api api) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
+func (api api) GetChatMember(ctx context.Context, chatID ChatID, userID ID) (*ChatMember, error) {
 	member := new(ChatMember)
 	return member, api.http.
 		GET(api.method("/getChatMember")).
 		QueryParam("chat_id", chatID.queryParam()).
 		QueryParam("user_id", userID.queryParam()).
+		Context(ctx).
 		Execute().
 		Decode(newResponse(member)).
 		Error
@@ -154,11 +160,12 @@ func (api api) GetChatMember(chatID ChatID, userID ID) (*ChatMember, error) {
 // The answer will be displayed to the user as a notification at the top of the chat screen or as an alert.
 // On success, True is returned.
 // https://core.telegram.org/bots/api#answercallbackquery
-func (api api) AnswerCallbackQuery(id string, options *AnswerCallbackQueryOptions) (bool, error) {
+func (api api) AnswerCallbackQuery(ctx context.Context, id string, options *AnswerCallbackQueryOptions) (bool, error) {
 	var r bool
 	return r, api.http.
 		POST(api.method("/answerCallbackQuery")).
 		Body(options.body(id)).
+		Context(ctx).
 		Execute().
 		Decode(newResponse(&r)).
 		Error

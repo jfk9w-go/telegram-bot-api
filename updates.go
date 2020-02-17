@@ -1,15 +1,14 @@
 package telegram
 
 import (
+	"context"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 // UpdateListener is a handler for incoming Updates.
 type UpdateListener interface {
 	// ReceiveUpdate is called on every received Update.
-	ReceiveUpdate(Client, Update) error
+	ReceiveUpdate(context.Context, Client, Update) error
 	// AllowedUpdates_ is the allowed_updates parameter passed
 	// in API calls to /getUpdates or /setWebhook.
 	AllowedUpdates() []string
@@ -42,19 +41,14 @@ func (l *CommandListener) HandleFunc(key string, handler CommandHandlerFunc) *Co
 	return l.Handle(key, handler)
 }
 
-func (l *CommandListener) ReceiveUpdate(client Client, update Update) error {
+func (l *CommandListener) ReceiveUpdate(ctx context.Context, client Client, update Update) error {
 	cmd := l.extractCommand(update)
 	if cmd == nil {
 		return nil
 	}
-
 	if listener, ok := l.handlers[cmd.Key]; ok {
-		err := listener.HandleCommand(client, cmd)
-		if err != nil {
-			return errors.Wrapf(err, "on %v", update)
-		}
+		return listener.HandleCommand(ctx, client, cmd)
 	}
-
 	return nil
 }
 
@@ -137,24 +131,24 @@ type Command struct {
 	CallbackQueryID string
 }
 
-func (c *Command) Reply(client Client, text string) error {
+func (c *Command) Reply(ctx context.Context, client Client, text string) error {
 	if c.CallbackQueryID != "" {
-		_, err := client.AnswerCallbackQuery(c.CallbackQueryID, &AnswerCallbackQueryOptions{Text: text})
+		_, err := client.AnswerCallbackQuery(ctx, c.CallbackQueryID, &AnswerCallbackQueryOptions{Text: text})
 		return err
 	} else {
-		_, err := client.Send(c.Chat.ID, Text{Text: text}, &SendOptions{ReplyToMessageID: c.Message.ID})
+		_, err := client.Send(ctx, c.Chat.ID, Text{Text: text}, &SendOptions{ReplyToMessageID: c.Message.ID})
 		return err
 	}
 }
 
 // CommandHandler describes a bot command handler.
 type CommandHandler interface {
-	HandleCommand(Client, *Command) error
+	HandleCommand(context.Context, Client, *Command) error
 }
 
 // CommandHandlerFunc implements CommandHandler interface for lambdas.
-type CommandHandlerFunc func(tg Client, cmd *Command) error
+type CommandHandlerFunc func(ctx context.Context, client Client, cmd *Command) error
 
-func (f CommandHandlerFunc) HandleCommand(c Client, cmd *Command) error {
-	return f(c, cmd)
+func (f CommandHandlerFunc) HandleCommand(ctx context.Context, client Client, cmd *Command) error {
+	return f(ctx, client, cmd)
 }

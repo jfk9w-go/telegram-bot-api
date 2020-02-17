@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/jfk9w-go/flu"
 )
 
@@ -57,7 +55,7 @@ func NewBot(http *flu.Client, token string) *Bot {
 	}
 }
 
-func (bot *Bot) Listen(concurrency int, listener UpdateListener) {
+func (bot *Bot) Listen(ctx context.Context, concurrency int, listener UpdateListener) {
 	bot.options.AllowedUpdates = listener.AllowedUpdates()
 	log.Printf("Listening for the following updates: %v", bot.options.AllowedUpdates)
 	channel := make(chan Update)
@@ -67,10 +65,11 @@ func (bot *Bot) Listen(concurrency int, listener UpdateListener) {
 
 	bot.work.Add(concurrency)
 	for i := 0; i < concurrency; i++ {
+		ctx, _ := context.WithCancel(ctx)
 		go func() {
 			defer bot.work.Done()
 			for update := range channel {
-				err := listener.ReceiveUpdate(bot.Client, update)
+				err := listener.ReceiveUpdate(ctx, bot.Client, update)
 				if err != nil {
 					log.Printf("Failed to process update %d: %s", update.ID, err)
 				}
@@ -78,13 +77,11 @@ func (bot *Bot) Listen(concurrency int, listener UpdateListener) {
 		}()
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	bot.cancel = cancel
+	defer close(channel)
 	for {
 		updates, err := bot.GetUpdates(ctx, bot.options)
 		switch {
-		case errors.Is(err, context.Canceled):
-			close(channel)
+		case ctx.Err() != nil:
 			return
 		case err != nil:
 			log.Printf("Telegram bot poll error: %s", err)
@@ -93,8 +90,11 @@ func (bot *Bot) Listen(concurrency int, listener UpdateListener) {
 		}
 
 		for _, update := range updates {
-			if update.Message != nil && bot.Answer(update.Message) {
-				continue
+			if update.Message != nil {
+				if err := bot.Answer(ctx, update.Message); err != nil {
+					log.Printf("Interrupting update listener because of %s", err)
+					return
+				}
 			}
 
 			channel <- update
@@ -103,11 +103,7 @@ func (bot *Bot) Listen(concurrency int, listener UpdateListener) {
 	}
 }
 
-func (bot *Bot) Close() error {
-	if bot.cancel != nil {
-		bot.cancel()
-		bot.work.Wait()
-	}
-
-	return nil
+func (bot *Bot) Shutdown(cancel context.CancelFunc) {
+	cancel()
+	bot.work.Wait()
 }

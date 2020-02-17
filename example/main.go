@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -40,15 +41,16 @@ func main() {
 		NewClient(), os.Args[1])
 
 	// Listen to the commands.
-	go bot.Listen(2, telegram.NewCommandListener(os.Args[2]).
-		HandleFunc("/greet", func(tg telegram.Client, cmd *telegram.Command) error {
-			_, err := tg.Send(cmd.Chat.ID,
+	ctx, cancel := context.WithCancel(context.Background())
+	go bot.Listen(ctx, 2, telegram.NewCommandListener(os.Args[2]).
+		HandleFunc("/greet", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
+			_, err := tg.Send(ctx, cmd.Chat.ID,
 				telegram.Text{Text: "Hello, " + cmd.User.FirstName},
 				&telegram.SendOptions{ReplyToMessageID: cmd.Message.ID})
 			return err
 		}).
-		HandleFunc("/tick", func(tg telegram.Client, cmd *telegram.Command) error {
-			_, err := tg.Send(cmd.Chat.ID,
+		HandleFunc("/tick", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
+			_, err := tg.Send(ctx, cmd.Chat.ID,
 				telegram.Media{
 					Type:      telegram.MediaTypeByMIMEType("image/jpeg"),
 					Resource:  flu.File("tick.png"),
@@ -57,7 +59,7 @@ func main() {
 				&telegram.SendOptions{DisableNotification: true})
 			return err
 		}).
-		HandleFunc("/ticks", func(tg telegram.Client, cmd *telegram.Command) error {
+		HandleFunc("/ticks", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
 			media := make([]telegram.Media, 4)
 			for i := range media {
 				media[i] = telegram.Media{
@@ -65,10 +67,10 @@ func main() {
 					Resource: flu.File("tick.png"),
 					Caption:  "Image " + strconv.Itoa(i)}
 			}
-			_, err := tg.SendMediaGroup(cmd.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
+			_, err := tg.SendMediaGroup(ctx, cmd.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
 			return err
 		}).
-		HandleFunc("/gifs", func(tg telegram.Client, cmd *telegram.Command) error {
+		HandleFunc("/gifs", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
 			media := make([]telegram.Media, 4)
 			for i := range media {
 				media[i] = telegram.Media{
@@ -77,11 +79,11 @@ func main() {
 					Caption:  "GIF " + strconv.Itoa(i),
 				}
 			}
-			_, err := tg.SendMediaGroup(cmd.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
+			_, err := tg.SendMediaGroup(ctx, cmd.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
 			return err
 		}).
-		HandleFunc("/webp", func(tg telegram.Client, cmd *telegram.Command) error {
-			_, err := tg.Send(cmd.Chat.ID,
+		HandleFunc("/webp", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
+			_, err := tg.Send(ctx, cmd.Chat.ID,
 				telegram.Media{
 					Type:     telegram.MediaTypeByMIMEType("image/webp"),
 					Resource: flu.File("webp.webp"),
@@ -89,43 +91,47 @@ func main() {
 				&telegram.SendOptions{DisableNotification: true})
 			return err
 		}).
-		HandleFunc("/count", func(tg telegram.Client, cmd *telegram.Command) error {
+		HandleFunc("/count", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
 			limit, err := strconv.Atoi(cmd.Payload)
 			if err != nil || limit <= 0 {
-				return cmd.Reply(tg, "limit must be a positive integer")
+				return cmd.Reply(ctx, tg, "limit must be a positive integer")
 			}
 			for i := 1; i <= limit; i++ {
-				_, err := tg.Send(cmd.Chat.ID, telegram.Text{Text: fmt.Sprintf("%d", i)}, nil)
+				_, err := tg.Send(ctx, cmd.Chat.ID, telegram.Text{Text: fmt.Sprintf("%d", i)}, nil)
 				if err != nil {
 					return err
 				}
 			}
 			return nil
 		}).
-		HandleFunc("/secret", func(tg telegram.Client, cmd *telegram.Command) error {
+		HandleFunc("/secret", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
 			fields := strings.Fields(cmd.Payload)
 			if len(fields) != 2 {
-				return cmd.Reply(tg, "usage: /secret Hi 5")
+				return cmd.Reply(ctx, tg, "usage: /secret Hi 5")
 			}
 			secs, err := strconv.Atoi(fields[1])
 			if err != nil || secs <= 0 {
-				return cmd.Reply(tg, "secs must be a positive integer")
+				return cmd.Reply(ctx, tg, "secs must be a positive integer")
 			}
 			timeout := time.Duration(secs) * time.Second
-			m, err := tg.Send(cmd.Chat.ID, telegram.Text{Text: fields[0]}, nil)
+			m, err := tg.Send(ctx, cmd.Chat.ID, telegram.Text{Text: fields[0]}, nil)
 			if err != nil {
 				return err
 			}
-			time.Sleep(timeout)
-			ok, err := tg.DeleteMessage(m.Chat.ID, m.ID)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(timeout):
+			}
+			ok, err := tg.DeleteMessage(ctx, m.Chat.ID, m.ID)
 			log.Printf("Message deleted: %v", ok)
 			return err
 		}).
-		HandleFunc("/say", func(tg telegram.Client, cmd *telegram.Command) error {
+		HandleFunc("/say", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
 			if cmd.Payload == "" {
-				return cmd.Reply(tg, "Please specify a message")
+				return cmd.Reply(ctx, tg, "Please specify a message")
 			}
-			_, err := tg.Send(cmd.Chat.ID,
+			_, err := tg.Send(ctx, cmd.Chat.ID,
 				telegram.Text{Text: "Here you go."},
 				&telegram.SendOptions{
 					ReplyMarkup: telegram.InlineKeyboard(
@@ -137,21 +143,21 @@ func main() {
 
 			return err
 		}).
-		HandleFunc("say", func(tg telegram.Client, cmd *telegram.Command) error {
-			return cmd.Reply(tg, cmd.Payload)
+		HandleFunc("say", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
+			return cmd.Reply(ctx, tg, cmd.Payload)
 		}).
-		HandleFunc("/question", func(tg telegram.Client, cmd *telegram.Command) error {
-			reply, err := tg.Ask(cmd.Chat.ID,
+		HandleFunc("/question", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
+			reply, err := tg.Ask(ctx, cmd.Chat.ID,
 				telegram.Text{Text: "Your question is, " + cmd.Payload},
 				&telegram.SendOptions{ReplyToMessageID: cmd.Message.ID})
 			if err != nil {
-				return cmd.Reply(tg, err.Error())
+				return cmd.Reply(ctx, tg, err.Error())
 			}
-			_, err = tg.Send(reply.Chat.ID,
+			_, err = tg.Send(ctx, reply.Chat.ID,
 				telegram.Text{Text: "Your answer is, " + reply.Text},
 				&telegram.SendOptions{ReplyToMessageID: reply.ID})
 			if err != nil {
-				return cmd.Reply(tg, err.Error())
+				return cmd.Reply(ctx, tg, err.Error())
 			}
 			return nil
 		}))
@@ -159,6 +165,6 @@ func main() {
 	// Wait for signals.
 	flu.AwaitSignal(syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
 	// Shutdown bot instance.
-	_ = bot.Close()
+	bot.Shutdown(cancel)
 	log.Printf("Shutdown")
 }

@@ -1,15 +1,10 @@
 package telegram
 
 import (
+	"context"
 	"sync"
-	"time"
 
 	"github.com/pkg/errors"
-)
-
-var (
-	AnswerTimeout   = 1 * time.Minute
-	ErrReplyTimeout = errors.New("reply timeout")
 )
 
 type Question chan *Message
@@ -29,13 +24,13 @@ func newConversationAwareClient(fca *floodControlAwareClient) Client {
 	}
 }
 
-func (c *conversationAwareClient) Ask(chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error) {
+func (c *conversationAwareClient) Ask(ctx context.Context, chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error) {
 	if options == nil {
 		options = new(SendOptions)
 	}
 
 	options.ReplyMarkup = ForceReply{ForceReply: true, Selective: true}
-	m, err := c.Send(chatID, sendable, options)
+	m, err := c.Send(ctx, chatID, sendable, options)
 	if err != nil {
 		return nil, errors.Wrap(err, "send question")
 	}
@@ -44,27 +39,29 @@ func (c *conversationAwareClient) Ask(chatID ChatID, sendable Sendable, options 
 	defer c.removeQuestion(m.ID)
 
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case answer := <-question:
 		return answer, nil
-	case <-time.After(AnswerTimeout):
-
 	}
-
-	return nil, ErrReplyTimeout
 }
 
-func (c *conversationAwareClient) Answer(message *Message) bool {
+func (c *conversationAwareClient) Answer(ctx context.Context, message *Message) error {
 	if message.ReplyToMessage != nil {
 		c.mutex.RLock()
 		question, ok := c.questions[message.ReplyToMessage.ID]
 		c.mutex.RUnlock()
 		if ok {
-			question <- message
-			return true
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case question <- message:
+				return nil
+			}
 		}
 	}
 
-	return false
+	return nil
 }
 
 func (c *conversationAwareClient) addQuestion(id ID) Question {

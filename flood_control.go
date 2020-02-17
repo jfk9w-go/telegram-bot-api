@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"context"
 	"log"
 	"strings"
 	"sync"
@@ -12,24 +13,24 @@ import (
 
 type floodControlAwareClient struct {
 	api
-	maxRetries int
-	limiter    flu.Limiter
-	recipients map[ChatID]flu.Limiter
-	mutex      sync.RWMutex
+	maxRetries  int
+	rateLimiter flu.RateLimiter
+	recipients  map[ChatID]flu.RateLimiter
+	mutex       sync.RWMutex
 }
 
 func newFloodControlAwareClient(api api, maxRetries int) *floodControlAwareClient {
 	return &floodControlAwareClient{
-		api:        api,
-		maxRetries: maxRetries,
-		limiter:    flu.IntervalLimiter(GatewaySendDelay),
-		recipients: make(map[ChatID]flu.Limiter),
+		api:         api,
+		maxRetries:  maxRetries,
+		rateLimiter: flu.IntervalRateLimiter(GatewaySendDelay),
+		recipients:  make(map[ChatID]flu.RateLimiter),
 	}
 }
 
 var unknownRecipientErr = errors.New("unknown recipient")
 
-func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *SendOptions, resp interface{}) error {
+func (c *floodControlAwareClient) send(ctx context.Context, chatID ChatID, item sendable, options *SendOptions, resp interface{}) error {
 	body, err := options.body(chatID, item)
 	if err != nil {
 		return errors.Wrap(err, "failed to write send data")
@@ -39,13 +40,17 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 	limiter, exists := c.recipients[chatID]
 	c.mutex.RUnlock()
 	if exists {
-		limiter.Start()
+		if err := limiter.Start(ctx); err != nil {
+			return err
+		}
 		defer limiter.Complete()
 	}
-	c.limiter.Start()
-	defer c.limiter.Complete()
+	if err := c.rateLimiter.Start(ctx); err != nil {
+		return err
+	}
+	defer c.rateLimiter.Complete()
 	for i := 0; i <= c.maxRetries; i++ {
-		err = c.api.send(url, body, resp)
+		err = c.api.send(ctx, url, body, resp)
 		switch err := err.(type) {
 		case nil:
 			if exists {
@@ -55,12 +60,21 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 			}
 		case TooManyMessages:
 			log.Printf("Too many messages, sleeping for %s...", err.RetryAfter)
-			time.Sleep(err.RetryAfter)
-			continue
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(err.RetryAfter):
+				continue
+			}
 		case Error:
 			return err
 		default:
-			time.Sleep(GatewaySendDelay)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(GatewaySendDelay):
+				continue
+			}
 		}
 	}
 	return err
@@ -69,10 +83,10 @@ func (c *floodControlAwareClient) send(chatID ChatID, item sendable, options *Se
 func (c *floodControlAwareClient) newRecipient(chat *Chat) {
 	c.mutex.Lock()
 	if _, ok := c.recipients[chat.ID]; !ok {
-		limiter := flu.IntervalLimiter(SendDelays[chat.Type])
-		c.recipients[chat.ID] = limiter
+		rateLimiter := flu.IntervalRateLimiter(SendDelays[chat.Type])
+		c.recipients[chat.ID] = rateLimiter
 		if chat.Username != nil {
-			c.recipients[*chat.Username] = limiter
+			c.recipients[*chat.Username] = rateLimiter
 		}
 	}
 	c.mutex.Unlock()
@@ -87,9 +101,9 @@ func (c *floodControlAwareClient) newRecipient(chat *Chat) {
 //   https://core.telegram.org/bots/api#sendaudio
 //   https://core.telegram.org/bots/api#sendvoice
 //   https://core.telegram.org/bots/api#sendsticker
-func (c *floodControlAwareClient) Send(chatID ChatID, item Sendable, options *SendOptions) (*Message, error) {
+func (c *floodControlAwareClient) Send(ctx context.Context, chatID ChatID, item Sendable, options *SendOptions) (*Message, error) {
 	m := new(Message)
-	err := c.send(chatID, item, options, m)
+	err := c.send(ctx, chatID, item, options, m)
 	if err == unknownRecipientErr {
 		c.newRecipient(&m.Chat)
 		err = nil
@@ -100,9 +114,9 @@ func (c *floodControlAwareClient) Send(chatID ChatID, item Sendable, options *Se
 // Use this method to send a group of photos or videos as an album.
 // On success, an array of the workers Messages is returned.
 // See https://core.telegram.org/bots/api#sendmediagroup
-func (c *floodControlAwareClient) SendMediaGroup(chatID ChatID, media []Media, options *SendOptions) ([]Message, error) {
+func (c *floodControlAwareClient) SendMediaGroup(ctx context.Context, chatID ChatID, media []Media, options *SendOptions) ([]Message, error) {
 	ms := make([]Message, 0)
-	err := c.send(chatID, MediaGroup(media), options, &ms)
+	err := c.send(ctx, chatID, MediaGroup(media), options, &ms)
 	if err == unknownRecipientErr {
 		c.newRecipient(&ms[0].Chat)
 		err = nil
