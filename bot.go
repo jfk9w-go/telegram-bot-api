@@ -47,7 +47,7 @@ var DefaultListenOptions = ListenOptions{
 
 type Bot struct {
 	Client
-	work sync.WaitGroup
+	sync.WaitGroup
 }
 
 func NewBot(http *flu.Client, token string, sendRetries int) *Bot {
@@ -72,10 +72,10 @@ func (bot *Bot) Listen(ctx context.Context, options *ListenOptions, listener Upd
 		options.Concurrency = 1
 	}
 
-	bot.work.Add(options.Concurrency)
+	bot.Add(options.Concurrency)
 	for i := 0; i < options.Concurrency; i++ {
 		go func(ctx context.Context) {
-			defer bot.work.Done()
+			defer bot.Done()
 			for update := range channel {
 				ctx, cancel := context.WithTimeout(ctx, options.ReceiveUpdateTimeout)
 				err := listener.ReceiveUpdate(ctx, bot.Client, update)
@@ -120,9 +120,4 @@ func (bot *Bot) Listen(ctx context.Context, options *ListenOptions, listener Upd
 			options.Updates.Offset = update.ID.Increment()
 		}
 	}
-}
-
-func (bot *Bot) Shutdown(cancel context.CancelFunc) {
-	cancel()
-	bot.work.Wait()
 }

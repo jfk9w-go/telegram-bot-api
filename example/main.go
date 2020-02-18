@@ -165,6 +165,7 @@ func main() {
 	// Wait for signals.
 	flu.AwaitSignal(syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
 	// Shutdown bot instance.
-	bot.Shutdown(cancel)
+	cancel()
+	bot.Wait()
 	log.Printf("Shutdown")
 }
