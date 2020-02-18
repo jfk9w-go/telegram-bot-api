@@ -28,7 +28,7 @@ func newFloodControlAwareClient(api api, maxRetries int) *floodControlAwareClien
 	}
 }
 
-var unknownRecipientErr = errors.New("unknown recipient")
+var errUnknownRecipient = errors.New("unknown recipient")
 
 func (c *floodControlAwareClient) send(ctx context.Context, chatID ChatID, item sendable, options *SendOptions, resp interface{}) error {
 	body, err := options.body(chatID, item)
@@ -57,7 +57,7 @@ func (c *floodControlAwareClient) send(ctx context.Context, chatID ChatID, item 
 			if exists {
 				return nil
 			} else {
-				return unknownRecipientErr
+				return errUnknownRecipient
 			}
 		case TooManyMessages:
 			log.Printf("Too many messages, sleeping for %s...", err.RetryAfter)
@@ -101,7 +101,7 @@ func (c *floodControlAwareClient) newRecipient(chat *Chat) {
 func (c *floodControlAwareClient) Send(ctx context.Context, chatID ChatID, item Sendable, options *SendOptions) (*Message, error) {
 	m := new(Message)
 	err := c.send(ctx, chatID, item, options, m)
-	if err == unknownRecipientErr {
+	if err == errUnknownRecipient {
 		c.newRecipient(&m.Chat)
 		err = nil
 	}
@@ -114,7 +114,7 @@ func (c *floodControlAwareClient) Send(ctx context.Context, chatID ChatID, item 
 func (c *floodControlAwareClient) SendMediaGroup(ctx context.Context, chatID ChatID, media []Media, options *SendOptions) ([]Message, error) {
 	ms := make([]Message, 0)
 	err := c.send(ctx, chatID, MediaGroup(media), options, &ms)
-	if err == unknownRecipientErr {
+	if err == errUnknownRecipient {
 		c.newRecipient(&ms[0].Chat)
 		err = nil
 	}
