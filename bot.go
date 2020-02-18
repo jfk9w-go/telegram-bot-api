@@ -46,8 +46,8 @@ var DefaultListenOptions = ListenOptions{
 }
 
 type Bot struct {
-	Client // initialied by Initialize()
-	work   sync.WaitGroup
+	Client
+	work sync.WaitGroup
 }
 
 func NewBot(http *flu.Client, token string, sendRetries int) *Bot {

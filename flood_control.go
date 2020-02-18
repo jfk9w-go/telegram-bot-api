@@ -51,6 +51,7 @@ func (c *floodControlAwareClient) send(ctx context.Context, chatID ChatID, item 
 	defer c.rateLimiter.Complete()
 	for i := 0; i <= c.maxRetries; i++ {
 		err = c.api.send(ctx, url, body, resp)
+		var timeout time.Duration
 		switch err := err.(type) {
 		case nil:
 			if exists {
@@ -60,21 +61,17 @@ func (c *floodControlAwareClient) send(ctx context.Context, chatID ChatID, item 
 			}
 		case TooManyMessages:
 			log.Printf("Too many messages, sleeping for %s...", err.RetryAfter)
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(err.RetryAfter):
-				continue
-			}
+			timeout = err.RetryAfter
 		case Error:
 			return err
 		default:
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(GatewaySendDelay):
-				continue
-			}
+			timeout = GatewaySendDelay
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(timeout):
 		}
 	}
 	return err
