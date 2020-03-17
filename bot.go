@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jfk9w-go/flu"
+	fluhttp "github.com/jfk9w-go/flu/http"
 )
 
 // GetUpdatesOptions is /getUpdates request options.
@@ -29,8 +30,8 @@ type GetUpdatesOptions struct {
 	AllowedUpdates []string `json:"allowed_updates,omitempty"`
 }
 
-func (o GetUpdatesOptions) body() flu.BodyEncoderTo {
-	return flu.JSON(o)
+func (o GetUpdatesOptions) body() flu.EncoderTo {
+	return flu.JSON{o}
 }
 
 type ListenOptions struct {
@@ -50,7 +51,7 @@ type Bot struct {
 	sync.WaitGroup
 }
 
-func NewBot(http *flu.Client, token string, sendRetries int) *Bot {
+func NewBot(http fluhttp.Client, token string, sendRetries int) *Bot {
 	api := newApi(http, token)
 	fca := newFloodControlAwareClient(api, sendRetries)
 	c := newConversationAwareClient(fca)

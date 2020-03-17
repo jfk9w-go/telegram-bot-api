@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jfk9w-go/flu"
+	fluhttp "github.com/jfk9w-go/flu/http"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 )
 
@@ -35,7 +36,7 @@ func main() {
 	}
 
 	// Create a bot instance.
-	bot := telegram.NewBot(flu.NewTransport().
+	bot := telegram.NewBot(fluhttp.NewTransport().
 		ResponseHeaderTimeout(2*time.Minute).
 		ProxyURL(proxy).
 		NewClient(), os.Args[1], 3)
@@ -53,7 +54,7 @@ func main() {
 			_, err := tg.Send(ctx, cmd.Chat.ID,
 				telegram.Media{
 					Type:      telegram.MediaTypeByMIMEType("image/jpeg"),
-					Resource:  flu.File("tick.png"),
+					Input:     flu.File("tick.png"),
 					Caption:   "Here's a <b>tick</b> for ya.",
 					ParseMode: telegram.HTML},
 				&telegram.SendOptions{DisableNotification: true})
@@ -63,9 +64,9 @@ func main() {
 			media := make([]telegram.Media, 4)
 			for i := range media {
 				media[i] = telegram.Media{
-					Type:     telegram.MediaTypeByMIMEType("image/jpeg"),
-					Resource: flu.File("tick.png"),
-					Caption:  "Image " + strconv.Itoa(i)}
+					Type:    telegram.MediaTypeByMIMEType("image/jpeg"),
+					Input:   flu.File("tick.png"),
+					Caption: "Image " + strconv.Itoa(i)}
 			}
 			_, err := tg.SendMediaGroup(ctx, cmd.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
 			return err
@@ -74,9 +75,9 @@ func main() {
 			media := make([]telegram.Media, 4)
 			for i := range media {
 				media[i] = telegram.Media{
-					Type:     telegram.MediaTypeByMIMEType("image/gif"),
-					Resource: flu.File("gif.gif"),
-					Caption:  "GIF " + strconv.Itoa(i),
+					Type:    telegram.MediaTypeByMIMEType("image/gif"),
+					Input:   flu.File("gif.gif"),
+					Caption: "GIF " + strconv.Itoa(i),
 				}
 			}
 			_, err := tg.SendMediaGroup(ctx, cmd.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
@@ -85,8 +86,8 @@ func main() {
 		HandleFunc("/webp", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
 			_, err := tg.Send(ctx, cmd.Chat.ID,
 				telegram.Media{
-					Type:     telegram.MediaTypeByMIMEType("image/webp"),
-					Resource: flu.File("webp.webp"),
+					Type:  telegram.MediaTypeByMIMEType("image/webp"),
+					Input: flu.File("webp.webp"),
 				},
 				&telegram.SendOptions{DisableNotification: true})
 			return err

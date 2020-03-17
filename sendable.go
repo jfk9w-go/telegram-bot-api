@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"strconv"
 
+	fluhttp "github.com/jfk9w-go/flu/http"
+
 	"github.com/jfk9w-go/flu"
 )
 
 type sendable interface {
 	kind() string
-	body(flu.Form) (flu.BodyEncoderTo, error)
+	body(fluhttp.Form) (flu.EncoderTo, error)
 }
 
 type Sendable interface {
@@ -27,8 +29,8 @@ func (t Text) kind() string {
 	return "message"
 }
 
-func (t Text) body(body flu.Form) (flu.BodyEncoderTo, error) {
-	return body, nil
+func (t Text) body(form fluhttp.Form) (flu.EncoderTo, error) {
+	return form, nil
 }
 
 func (t Text) self() Sendable {
@@ -87,22 +89,22 @@ func MediaTypeByMIMEType(mimeType string) MediaType {
 }
 
 type Media struct {
-	Type      MediaType    `url:"-" json:"type"`
-	Resource  flu.Readable `url:"-" json:"-"`
-	Caption   string       `url:"caption,omitempty" json:"caption,omitempty"`
-	ParseMode ParseMode    `url:"parse_mode,omitempty" json:"parse_mode,omitempty"`
+	Type      MediaType `url:"-" json:"type"`
+	Input     flu.Input `url:"-" json:"-"`
+	Caption   string    `url:"caption,omitempty" json:"caption,omitempty"`
+	ParseMode ParseMode `url:"parse_mode,omitempty" json:"parse_mode,omitempty"`
 }
 
 func (m Media) kind() string {
 	return string(m.Type)
 }
 
-func (m Media) body(form flu.Form) (flu.BodyEncoderTo, error) {
-	switch r := m.Resource.(type) {
+func (m Media) body(form fluhttp.Form) (flu.EncoderTo, error) {
+	switch r := m.Input.(type) {
 	case flu.URL:
 		return form.Set(string(m.Type), r.URL()), nil
 	default:
-		return form.Multipart().File(string(m.Type), m.Resource), nil
+		return form.Multipart().File(string(m.Type), m.Input), nil
 	}
 }
 
@@ -121,13 +123,13 @@ func (mg MediaGroup) kind() string {
 	return "mediaGroup"
 }
 
-func (mg MediaGroup) body(form flu.Form) (flu.BodyEncoderTo, error) {
-	var multipart flu.MultipartForm
+func (mg MediaGroup) body(form fluhttp.Form) (flu.EncoderTo, error) {
+	var multipart fluhttp.MultipartForm
 	multipartInitialized := false
 	media := make([]mediaJSON, len(mg))
 	for i, m := range mg {
 		m := mediaJSON{m, ""}
-		switch r := m.Resource.(type) {
+		switch r := m.Input.(type) {
 		case flu.URL:
 			m.MediaURL = r.URL()
 		default:
@@ -136,7 +138,7 @@ func (mg MediaGroup) body(form flu.Form) (flu.BodyEncoderTo, error) {
 				multipartInitialized = true
 			}
 			id := "media" + strconv.Itoa(i)
-			multipart.File(id, m.Resource)
+			multipart = multipart.File(id, m.Input)
 			m.MediaURL = "attach://" + id
 		}
 		media[i] = m
@@ -145,7 +147,7 @@ func (mg MediaGroup) body(form flu.Form) (flu.BodyEncoderTo, error) {
 	if err != nil {
 		return nil, err
 	}
-	form.Add("media", string(bytes))
+	form = form.Add("media", string(bytes))
 	if multipartInitialized {
 		return multipart, nil
 	}

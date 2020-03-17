@@ -6,17 +6,18 @@ import (
 	"time"
 
 	"github.com/jfk9w-go/flu"
+	fluhttp "github.com/jfk9w-go/flu/http"
 )
 
 // api is the Telegram Bot API client implementation.
 // It can not be instantiated by package users.
 // Instead, it should be used as part of Bot.
 type api struct {
-	http    *flu.Client
+	http    fluhttp.Client
 	baseURI string
 }
 
-var acceptedResponseCodes = []int{
+var acceptedStatusCodes = []int{
 	http.StatusOK,
 	http.StatusSeeOther,
 	http.StatusBadRequest,
@@ -27,15 +28,15 @@ var acceptedResponseCodes = []int{
 	http.StatusInternalServerError,
 }
 
-func newApi(http *flu.Client, token string) api {
+func newApi(http fluhttp.Client, token string) api {
 	if token == "" {
 		panic("token must not be empty")
 	}
-	if http == nil {
-		http = flu.NewTransport().
+	if http.Client == nil {
+		http = fluhttp.NewTransport().
 			ResponseHeaderTimeout(2 * time.Minute).
 			NewClient().
-			AcceptResponseCodes(acceptedResponseCodes...)
+			AcceptStatus(acceptedStatusCodes...)
 	}
 	return api{
 		http:    http,
@@ -50,10 +51,10 @@ func (api api) GetUpdates(ctx context.Context, options GetUpdatesOptions) ([]Upd
 	updates := make([]Update, 0)
 	return updates, api.http.
 		POST(api.method("/getUpdates")).
-		Body(flu.JSON(options)).
+		BodyEncoder(flu.JSON{options}).
 		Context(ctx).
 		Execute().
-		Decode(newResponse(&updates)).
+		DecodeBody(newResponse(&updates)).
 		Error
 }
 
@@ -66,7 +67,7 @@ func (api api) GetMe(ctx context.Context) (*User, error) {
 		GET(api.method("/getMe")).
 		Context(ctx).
 		Execute().
-		Decode(newResponse(user)).
+		DecodeBody(newResponse(user)).
 		Error
 }
 
@@ -79,13 +80,13 @@ func (api api) GetMe(ctx context.Context) (*User, error) {
 //   https://core.telegram.org/bots/api#sendvideo
 //   https://core.telegram.org/bots/api#senddocument
 //   https://core.telegram.org/bots/api#sendmediagroup
-func (api api) send(ctx context.Context, url string, body flu.BodyEncoderTo, resp interface{}) error {
+func (api api) send(ctx context.Context, url string, body flu.EncoderTo, resp interface{}) error {
 	return api.http.
 		POST(url).
-		Body(body).
+		BodyEncoder(body).
 		Context(ctx).
 		Execute().
-		Decode(newResponse(resp)).
+		DecodeBody(newResponse(resp)).
 		Error
 }
 
@@ -106,7 +107,7 @@ func (api api) DeleteMessage(ctx context.Context, chatID ChatID, messageID ID) (
 		QueryParam("message_id", messageID.queryParam()).
 		Context(ctx).
 		Execute().
-		Decode(newResponse(&r)).
+		DecodeBody(newResponse(&r)).
 		Error
 }
 
@@ -121,7 +122,7 @@ func (api api) GetChat(ctx context.Context, chatID ChatID) (*Chat, error) {
 		QueryParam("chat_id", chatID.queryParam()).
 		Context(ctx).
 		Execute().
-		Decode(newResponse(chat)).
+		DecodeBody(newResponse(chat)).
 		Error
 }
 
@@ -137,7 +138,7 @@ func (api api) GetChatAdministrators(ctx context.Context, chatID ChatID) ([]Chat
 		QueryParam("chat_id", chatID.queryParam()).
 		Context(ctx).
 		Execute().
-		Decode(newResponse(&members)).
+		DecodeBody(newResponse(&members)).
 		Error
 }
 
@@ -152,7 +153,7 @@ func (api api) GetChatMember(ctx context.Context, chatID ChatID, userID ID) (*Ch
 		QueryParam("user_id", userID.queryParam()).
 		Context(ctx).
 		Execute().
-		Decode(newResponse(member)).
+		DecodeBody(newResponse(member)).
 		Error
 }
 
@@ -164,10 +165,10 @@ func (api api) AnswerCallbackQuery(ctx context.Context, id string, options *Answ
 	var r bool
 	return r, api.http.
 		POST(api.method("/answerCallbackQuery")).
-		Body(options.body(id)).
+		BodyEncoder(options.body(id)).
 		Context(ctx).
 		Execute().
-		Decode(newResponse(&r)).
+		DecodeBody(newResponse(&r)).
 		Error
 }
 

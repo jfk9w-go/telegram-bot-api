@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
+	fluhttp "github.com/jfk9w-go/flu/http"
+
 	"github.com/jfk9w-go/flu"
 	"github.com/pkg/errors"
 )
@@ -25,35 +27,28 @@ type SendOptions struct {
 	ReplyMarkup         ReplyMarkup
 }
 
-func (o *SendOptions) body(chatID ChatID, item sendable) (flu.BodyEncoderTo, error) {
+func (o *SendOptions) body(chatID ChatID, item sendable) (flu.EncoderTo, error) {
 	isMediaGroup := item.kind() == "mediaGroup"
-	var form flu.Form
-	if isMediaGroup {
-		form = flu.EmptyForm(true)
-	} else {
-		form = flu.FormValue(item, true)
+	form := fluhttp.Form{}
+	if !isMediaGroup {
+		form = form.Value(item)
 	}
-
-	form.Set("chat_id", chatID.queryParam())
+	form = form.Set("chat_id", chatID.queryParam())
 	if o != nil {
 		if o.DisableNotification {
-			form.Set("disable_notification", "1")
+			form = form.Set("disable_notification", "1")
 		}
-
 		if o.ReplyToMessageID != 0 {
-			form.Set("reply_to_message_id", o.ReplyToMessageID.queryParam())
+			form = form.Set("reply_to_message_id", o.ReplyToMessageID.queryParam())
 		}
-
 		if !isMediaGroup && o.ReplyMarkup != nil {
 			bytes, err := json.Marshal(o.ReplyMarkup)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to serialize reply_markup")
 			}
-
-			form.Set("reply_markup", string(bytes))
+			form = form.Set("reply_markup", string(bytes))
 		}
 	}
-
 	return item.body(form)
 }
 
@@ -64,6 +59,6 @@ type AnswerCallbackQueryOptions struct {
 	CacheTime int    `url:"cache_time,omitempty"`
 }
 
-func (o *AnswerCallbackQueryOptions) body(id string) flu.BodyEncoderTo {
-	return flu.FormValue(o, true).Add("callback_query_id", id)
+func (o *AnswerCallbackQueryOptions) body(id string) flu.EncoderTo {
+	return fluhttp.Form{}.Value(o).Add("callback_query_id", id)
 }
