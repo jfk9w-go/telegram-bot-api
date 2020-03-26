@@ -40,12 +40,13 @@ func (t Text) self() Sendable {
 type MediaType string
 
 const (
-	Photo    MediaType = "photo"
-	Video    MediaType = "video"
-	Document MediaType = "document"
-	Audio    MediaType = "audio"
-	Sticker  MediaType = "sticker"
-	Voice    MediaType = "voice"
+	Photo     MediaType = "photo"
+	Animation MediaType = "animation"
+	Video     MediaType = "video"
+	Document  MediaType = "document"
+	Audio     MediaType = "audio"
+	Sticker   MediaType = "sticker"
+	Voice     MediaType = "voice"
 )
 
 func (mt MediaType) RemoteMaxSize() int64 {
@@ -70,7 +71,7 @@ var (
 		"image/jpeg":               Photo,
 		"image/png":                Photo,
 		"image/bmp":                Photo,
-		"image/gif":                Video,
+		"image/gif":                Animation,
 		"video/mp4":                Video,
 		"application/pdf":          Document,
 		"application/octet-stream": Document,

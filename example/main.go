@@ -71,16 +71,13 @@ func main() {
 			_, err := tg.SendMediaGroup(ctx, cmd.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
 			return err
 		}).
-		HandleFunc("/gifs", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
-			media := make([]telegram.Media, 4)
-			for i := range media {
-				media[i] = telegram.Media{
-					Type:    telegram.MediaTypeByMIMEType("image/gif"),
-					Input:   flu.File("gif.gif"),
-					Caption: "GIF " + strconv.Itoa(i),
-				}
+		HandleFunc("/gif", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
+			media := telegram.Media{
+				Type:    telegram.MediaTypeByMIMEType("image/gif"),
+				Input:   flu.File("gif.gif"),
+				Caption: "GIF",
 			}
-			_, err := tg.SendMediaGroup(ctx, cmd.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
+			_, err := tg.Send(ctx, cmd.Chat.ID, media, &telegram.SendOptions{DisableNotification: true})
 			return err
 		}).
 		HandleFunc("/webp", func(ctx context.Context, tg telegram.Client, cmd *telegram.Command) error {
