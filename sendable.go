@@ -65,6 +65,19 @@ func (mt MediaType) AttachMaxSize() int64 {
 	}
 }
 
+func (mt MediaType) multipartFilename() string {
+	var suffix string
+	switch mt {
+	case Animation:
+		suffix = ".gif"
+	case Video:
+		suffix = ".mp4"
+	case Audio:
+		suffix = ".mp3"
+	}
+	return string(mt) + suffix
+}
+
 var (
 	DefaultMediaType   = Document
 	MIMEType2MediaType = map[string]MediaType{
@@ -105,7 +118,7 @@ func (m Media) body(form fluhttp.Form) (flu.EncoderTo, error) {
 	case flu.URL:
 		return form.Set(string(m.Type), r.URL()), nil
 	default:
-		return form.Multipart().File(string(m.Type), m.Input), nil
+		return form.Multipart().File(string(m.Type), m.Type.multipartFilename(), m.Input), nil
 	}
 }
 
@@ -139,7 +152,7 @@ func (mg MediaGroup) body(form fluhttp.Form) (flu.EncoderTo, error) {
 				multipartInitialized = true
 			}
 			id := "media" + strconv.Itoa(i)
-			multipart = multipart.File(id, m.Input)
+			multipart = multipart.File(id, m.Type.multipartFilename(), m.Input)
 			m.MediaURL = "attach://" + id
 		}
 		media[i] = m
