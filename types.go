@@ -1,6 +1,6 @@
 package telegram
 
-// ParseMode is a parse_mode request parameter type.
+// Format is a parse_mode request parameter type.
 type ParseMode string
 
 const (

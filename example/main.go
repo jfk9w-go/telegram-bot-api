@@ -12,6 +12,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jfk9w-go/telegram-bot-api/richtext"
+
+	"github.com/pkg/errors"
+
 	"github.com/jfk9w-go/flu"
 	fluhttp "github.com/jfk9w-go/flu/http"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
@@ -26,9 +30,15 @@ func CommandListenerFunc(ctx context.Context, bot telegram.Client, cmd telegram.
 	case "/tick":
 		_, err = bot.Send(ctx, cmd.Chat.ID,
 			telegram.Media{
-				Type:      telegram.MediaTypeByMIMEType("image/jpeg"),
-				Input:     flu.File("tick.png"),
-				Caption:   "Here's a <b>tick</b> for ya.",
+				Type:  telegram.MediaTypeByMIMEType("image/jpeg"),
+				Input: flu.File("tick.png"),
+				Caption: richtext.HTML(-1, 1, nil, nil).
+					Text("Here's a ").
+					StartTag("b", nil).
+					Text("tick").
+					EndTag().
+					Text(" for ya.").
+					Flush().First(),
 				ParseMode: telegram.HTML},
 			&telegram.SendOptions{DisableNotification: true})
 	case "/gif":
@@ -46,70 +56,68 @@ func CommandListenerFunc(ctx context.Context, bot telegram.Client, cmd telegram.
 			},
 			&telegram.SendOptions{DisableNotification: true})
 	case "/count":
-		var limit int
-		limit, err = strconv.Atoi(cmd.Payload)
-		if err != nil || limit <= 0 {
-			return cmd.Reply(ctx, bot, "limit must be a positive integer")
-		}
-		for i := 1; i <= limit; i++ {
-			_, err = bot.Send(ctx, cmd.Chat.ID, telegram.Text{Text: fmt.Sprintf("%d", i)}, nil)
-			if err != nil {
-				return cmd.Reply(ctx, bot, err.Error())
+		if limit, err := strconv.Atoi(cmd.Payload); err != nil || limit <= 0 {
+			return errors.New("limit must be a positive integer")
+		} else {
+			for i := 1; i <= limit; i++ {
+				_, err = bot.Send(ctx, cmd.Chat.ID, telegram.Text{Text: fmt.Sprintf("%d", i)}, nil)
+				if err != nil {
+					return errors.Wrapf(err, "send %d", i)
+				}
 			}
 		}
 	case "/secret":
-		fields := strings.Fields(cmd.Payload)
-		if len(fields) != 2 {
-			return cmd.Reply(ctx, bot, "usage: /secret Hi 5")
+		if fields := strings.Fields(cmd.Payload); len(fields) != 2 {
+			return errors.New("usage: /secret Hi 5")
+		} else if secs, err := strconv.Atoi(fields[1]); err != nil || secs <= 0 {
+			return errors.New("secs must be a positive integer")
+		} else if m, err := bot.Send(ctx, cmd.Chat.ID, telegram.Text{Text: fields[0]}, nil); err != nil {
+			return errors.Wrap(err, "send")
+		} else {
+			timer := time.NewTimer(time.Duration(secs) * time.Second)
+			select {
+			case <-ctx.Done():
+				if timer.Stop() {
+					<-timer.C
+				}
+				return ctx.Err()
+			case <-timer.C:
+				timer.Stop()
+				if ok, err := bot.DeleteMessage(ctx, m.Chat.ID, m.ID); err != nil {
+					return errors.Wrap(err, "delete")
+				} else if ok {
+					log.Printf("message %s deleted: %v", m.ID.String(), ok)
+					return nil
+				}
+			}
 		}
-		var secs int
-		if secs, err = strconv.Atoi(fields[1]); err != nil || secs <= 0 {
-			return cmd.Reply(ctx, bot, "secs must be a positive integer")
-		}
-		timeout := time.Duration(secs) * time.Second
-		var m *telegram.Message
-		if m, err = bot.Send(ctx, cmd.Chat.ID, telegram.Text{Text: fields[0]}, nil); err != nil {
-			return cmd.Reply(ctx, bot, err.Error())
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(timeout):
-		}
-		var ok bool
-		ok, err = bot.DeleteMessage(ctx, m.Chat.ID, m.ID)
-		log.Printf("Message deleted: %v", ok)
 	case "/say":
 		if cmd.Payload == "" {
-			err = cmd.Reply(ctx, bot, "Please specify a message")
-			return
-		}
-		_, err = bot.Send(ctx, cmd.Chat.ID,
+			return errors.New("specify a word")
+		} else if _, err := bot.Send(ctx, cmd.Chat.ID,
 			telegram.Text{Text: "Here you go."},
 			&telegram.SendOptions{
-				ReplyMarkup: telegram.InlineKeyboard(
-					[][3]string{
-						{"Say " + cmd.Payload, "say", cmd.Payload},
-						{"Another button", "", ""}}),
-			},
-		)
-	case "say":
-		return cmd.Reply(ctx, bot, cmd.Payload)
-	case "/question":
-		reply, err := bot.Ask(ctx, cmd.Chat.ID,
-			telegram.Text{Text: "Your question is, " + cmd.Payload},
-			&telegram.SendOptions{ReplyToMessageID: cmd.Message.ID})
-		if err != nil {
-			return cmd.Reply(ctx, bot, err.Error())
+				ReplyMarkup: telegram.InlineKeyboard([][3]string{
+					{"Say " + cmd.Payload, "say", cmd.Payload},
+					{"Another button", "", ""}})}); err != nil {
+			return errors.Wrap(err, "send")
 		}
-		_, err = bot.Send(ctx, reply.Chat.ID,
+	case "say":
+		if err := cmd.Reply(ctx, bot, cmd.Payload); err != nil {
+			return errors.Wrap(err, "on reply")
+		}
+	case "/question":
+		if reply, err := bot.Ask(ctx, cmd.Chat.ID,
+			telegram.Text{Text: "Your question is, " + cmd.Payload},
+			&telegram.SendOptions{ReplyToMessageID: cmd.Message.ID}); err != nil {
+			return errors.Wrap(err, "ask")
+		} else if _, err := bot.Send(ctx, reply.Chat.ID,
 			telegram.Text{Text: "Your answer is, " + reply.Text},
-			&telegram.SendOptions{ReplyToMessageID: reply.ID})
-		if err != nil {
-			return cmd.Reply(ctx, bot, err.Error())
+			&telegram.SendOptions{ReplyToMessageID: reply.ID}); err != nil {
+			return errors.Wrap(err, "answer")
 		}
 	}
-	return
+	return nil
 }
 
 // This is an example bot which has three commands:

@@ -146,7 +146,7 @@ func (bot *Bot) CommandListener(options *GetUpdatesOptions, rateLimiter flu.Rate
 	go func(bot *Bot) {
 		defer bot.work.Done()
 		for cmd := range commands {
-			if err := rateLimiter.Start(bot.ctx); err != nil {
+			if rateLimiter.Start(bot.ctx) != nil {
 				return
 			}
 
@@ -162,12 +162,9 @@ func (bot *Bot) CommandListener(options *GetUpdatesOptions, rateLimiter flu.Rate
 				err := listener.OnCommand(ctx, bot, cmd)
 				if ctx.Err() != nil {
 					return
-				}
-
-				if err != nil {
+				} else if err != nil {
 					log.Printf("%s processed %s from %d with error %s", bot.Username(), cmd.Key, cmd.User.ID, err)
-					sendErr := cmd.Reply(ctx, bot, err.Error())
-					if sendErr != nil {
+					if sendErr := cmd.Reply(ctx, bot, err.Error()); sendErr != nil {
 						log.Printf(`%s unable to send error reply "%s" to %s: %s`,
 							bot.Username(), err.Error(), cmd.Chat.ID, sendErr.Error())
 					}
