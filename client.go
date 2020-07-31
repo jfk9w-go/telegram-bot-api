@@ -15,14 +15,6 @@ type Client interface {
 	Answer(message *Message) bool
 }
 
-type Bot interface {
-	Client
-	Listen(options *GetUpdatesOptions) <-chan Update
-	Commands(options *GetUpdatesOptions) <-chan Command
-	Username() string
-	Close()
-}
-
 func InlineKeyboard(rows ...[][3]string) ReplyMarkup {
 	keyboard := make([][]InlineKeyboardButton, len(rows))
 	for i, row := range rows {

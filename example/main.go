@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -18,62 +17,7 @@ import (
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 )
 
-type Bot struct {
-	telegram.Bot
-	context.Context
-	cancel func()
-	work   sync.WaitGroup
-}
-
-func NewBot(ctx context.Context, bot telegram.Bot) *Bot {
-	ctx, cancel := context.WithCancel(ctx)
-	return &Bot{
-		Bot:     bot,
-		Context: ctx,
-		cancel:  cancel,
-	}
-}
-
-func (bot *Bot) Close() {
-	bot.Bot.Close()
-	bot.cancel()
-	bot.work.Wait()
-	log.Printf("%s shutdown", bot.Username())
-}
-
-func (bot *Bot) Dispatcher(commands <-chan telegram.Command) {
-	bot.work.Add(1)
-	defer bot.work.Done()
-	log.Printf("%s is running", bot.Username())
-	for cmd := range commands {
-		ctx, cancel := context.WithCancel(bot.Context)
-		bot.work.Add(1)
-		go func(ctx context.Context, cancel func(), bot *Bot, cmd telegram.Command) {
-			defer bot.work.Done()
-			err := bot.OnCommand(cmd)
-			if ctx.Err() != nil {
-				log.Printf(`%s context error: %s`, bot.Username(), ctx.Err().Error())
-				return
-			}
-
-			if err != nil {
-				log.Printf("%s processed %s from %d with error %s", bot.Username(), cmd.Key, cmd.User.ID, err)
-				sendErr := cmd.Reply(ctx, bot, err.Error())
-				if sendErr != nil {
-					log.Printf(`%s unable to send error reply "%s" to %s: %s`,
-						bot.Username(), err.Error(), cmd.Chat.ID, sendErr.Error())
-				}
-			} else {
-				log.Printf("%s processed %s from %d ok", bot.Username(), cmd.Key, cmd.User.ID)
-			}
-
-			cancel()
-		}(ctx, cancel, bot, cmd)
-	}
-}
-
-func (bot Bot) OnCommand(cmd telegram.Command) (err error) {
-	ctx, cancel := context.WithTimeout(bot.Context, 10*time.Minute)
+func CommandListenerFunc(ctx context.Context, bot telegram.Client, cmd telegram.Command) (err error) {
 	switch cmd.Key {
 	case "/greet":
 		_, err = bot.Send(ctx, cmd.Chat.ID,
@@ -165,8 +109,6 @@ func (bot Bot) OnCommand(cmd telegram.Command) (err error) {
 			return cmd.Reply(ctx, bot, err.Error())
 		}
 	}
-
-	cancel()
 	return
 }
 
@@ -178,17 +120,19 @@ func (bot Bot) OnCommand(cmd telegram.Command) (err error) {
 //
 // You can launch this example by simply doing:
 //   cd example/ && go run main.go <token>
-// where <token> is your Telegram UpdateAware API token.
+// where <token> is your Telegram Bot API token.
 func main() {
-	defer log.Printf("Shutdown")
+	defer log.Printf("main exit")
 	go func() { log.Println(http.ListenAndServe("localhost:6060", nil)) }()
 
 	// Create a bot instance.
-	bot := NewBot(context.Background(),
-		telegram.NewBot(fluhttp.NewTransport().
-			ResponseHeaderTimeout(2*time.Minute).
-			NewClient(), os.Args[1], 3))
-	defer bot.Close()
-	go bot.Dispatcher(bot.Commands(&telegram.GetUpdatesOptions{TimeoutSecs: 60}))
+	defer telegram.NewBot(fluhttp.NewTransport().
+		ResponseHeaderTimeout(2*time.Minute).
+		NewClient(), os.Args[1], 3).
+		CommandListenerFunc(
+			&telegram.GetUpdatesOptions{TimeoutSecs: 60},
+			flu.ConcurrencyRateLimiter(1),
+			CommandListenerFunc).
+		Close()
 	flu.AwaitSignal(syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
 }

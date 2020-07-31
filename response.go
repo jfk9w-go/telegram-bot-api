@@ -15,7 +15,7 @@ type responseParameters struct {
 	RetryAfter      int `json:"retry_after"`
 }
 
-// response is a generic Telegram UpdateAware API response.
+// response is a generic Telegram Bot API response.
 // See https://core.telegram.org/bots/api#making-requests
 type response struct {
 	Ok          bool                `json:"ok"`
@@ -45,7 +45,7 @@ func (r *response) DecodeFrom(reader io.Reader) error {
 	return nil
 }
 
-// Error is an error returned by Telegram UpdateAware API.
+// Error is an error returned by Telegram Bot API.
 // See https://core.telegram.org/bots/api#making-requests
 type Error struct {
 	// ErrorCode is an integer error code.

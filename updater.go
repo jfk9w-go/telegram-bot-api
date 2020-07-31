@@ -37,7 +37,7 @@ func (o *GetUpdatesOptions) body() flu.EncoderTo {
 	return flu.JSON{o}
 }
 
-type UpdateAware struct {
+type Bot struct {
 	BaseClient
 	*FloodControlAware
 	*ConversationAware
@@ -47,12 +47,12 @@ type UpdateAware struct {
 	work   sync.WaitGroup
 }
 
-func NewBot(client *fluhttp.Client, token string, sendRetries int) Bot {
+func NewBot(client *fluhttp.Client, token string, sendRetries int) *Bot {
 	base := NewBaseClient(client, token)
 	floodControl := FloodControl(base, sendRetries)
 	conversations := Conversations(floodControl)
 	ctx, cancel := context.WithCancel(context.Background())
-	return &UpdateAware{
+	return &Bot{
 		BaseClient:        base,
 		FloodControlAware: floodControl,
 		ConversationAware: conversations,
@@ -61,29 +61,29 @@ func NewBot(client *fluhttp.Client, token string, sendRetries int) Bot {
 	}
 }
 
-func (u *UpdateAware) Listen(options *GetUpdatesOptions) <-chan Update {
-	me, err := u.GetMe(u.ctx)
+func (bot *Bot) Listen(options *GetUpdatesOptions) <-chan Update {
+	me, err := bot.GetMe(bot.ctx)
 	if err != nil {
 		panic(errors.Wrap(err, "getMe"))
 	}
 
-	u.me = me
+	bot.me = me
 	channel := make(chan Update)
-	u.work.Add(1)
-	go func() {
+	bot.work.Add(1)
+	go func(bot *Bot) {
 		defer func() {
 			close(channel)
-			u.work.Done()
+			bot.work.Done()
 		}()
 
 		for {
-			updates, err := u.GetUpdates(u.ctx, options)
-			if u.ctx.Err() != nil {
+			updates, err := bot.GetUpdates(bot.ctx, options)
+			if bot.ctx.Err() != nil {
 				return
 			} else if err != nil {
-				log.Printf("%s poll error: %s", u.Username(), err)
+				log.Printf("%s poll error: %s", bot.Username(), err)
 				select {
-				case <-u.ctx.Done():
+				case <-bot.ctx.Done():
 					return
 				case <-time.After(time.Duration(options.TimeoutSecs) * time.Second):
 					continue
@@ -91,11 +91,11 @@ func (u *UpdateAware) Listen(options *GetUpdatesOptions) <-chan Update {
 			}
 
 			for _, update := range updates {
-				if update.Message != nil && u.Answer(update.Message) {
+				if update.Message != nil && bot.Answer(update.Message) {
 					// already answered
 				} else {
 					select {
-					case <-u.ctx.Done():
+					case <-bot.ctx.Done():
 						return
 					case channel <- update:
 					}
@@ -104,48 +104,110 @@ func (u *UpdateAware) Listen(options *GetUpdatesOptions) <-chan Update {
 				options.Offset = update.ID.Increment()
 			}
 		}
-	}()
+	}(bot)
 
 	return channel
 }
 
-func (u *UpdateAware) Username() string {
-	return u.me.Username.String()
+func (bot *Bot) Username() string {
+	return bot.me.Username.String()
 }
 
-func (u *UpdateAware) Commands(options *GetUpdatesOptions) <-chan Command {
+func (bot *Bot) Commands(options *GetUpdatesOptions) <-chan Command {
 	options.AllowedUpdates = []string{"message", "edited_message", "callback_query"}
 	channel := make(chan Command)
-	go func(updates <-chan Update) {
-		defer close(channel)
+	bot.work.Add(1)
+	go func(bot *Bot, updates <-chan Update) {
+		defer func() {
+			close(channel)
+			bot.work.Done()
+		}()
 		for update := range updates {
-			if cmd, ok := u.extractCommand(update); ok {
+			if cmd, ok := bot.extractCommand(update); ok {
 				channel <- cmd
 			}
 		}
-	}(u.Listen(options))
-
+	}(bot, bot.Listen(options))
 	return channel
 }
 
-func (u *UpdateAware) extractCommand(update Update) (Command, bool) {
+type CommandListener interface {
+	OnCommand(ctx context.Context, client Client, cmd Command) error
+}
+
+func (bot *Bot) CommandListener(options *GetUpdatesOptions, rateLimiter flu.RateLimiter, listener CommandListener) *Bot {
+	if rateLimiter == nil {
+		rateLimiter = flu.RateUnlimiter
+	}
+
+	commands := bot.Commands(options)
+	log.Printf("%s is running", bot.Username())
+	bot.work.Add(1)
+	go func(bot *Bot) {
+		defer bot.work.Done()
+		for cmd := range commands {
+			if err := rateLimiter.Start(bot.ctx); err != nil {
+				return
+			}
+
+			ctx, cancel := context.WithCancel(bot.ctx)
+			bot.work.Add(1)
+			go func(ctx context.Context, cancel func(), bot *Bot, cmd Command) {
+				defer func() {
+					cancel()
+					rateLimiter.Complete()
+					bot.work.Done()
+				}()
+
+				err := listener.OnCommand(ctx, bot, cmd)
+				if ctx.Err() != nil {
+					return
+				}
+
+				if err != nil {
+					log.Printf("%s processed %s from %d with error %s", bot.Username(), cmd.Key, cmd.User.ID, err)
+					sendErr := cmd.Reply(ctx, bot, err.Error())
+					if sendErr != nil {
+						log.Printf(`%s unable to send error reply "%s" to %s: %s`,
+							bot.Username(), err.Error(), cmd.Chat.ID, sendErr.Error())
+					}
+				} else {
+					log.Printf("%s processed %s from %d ok", bot.Username(), cmd.Key, cmd.User.ID)
+				}
+			}(ctx, cancel, bot, cmd)
+		}
+	}(bot)
+	return bot
+}
+
+type CommandListenerFunc func(context.Context, Client, Command) error
+
+func (fun CommandListenerFunc) OnCommand(ctx context.Context, client Client, cmd Command) error {
+	return fun(ctx, client, cmd)
+}
+
+func (bot *Bot) CommandListenerFunc(options *GetUpdatesOptions, rateLimiter flu.RateLimiter, fun CommandListenerFunc) *Bot {
+	return bot.CommandListener(options, rateLimiter, fun)
+}
+
+func (bot *Bot) extractCommand(update Update) (Command, bool) {
 	switch {
 	case update.Message != nil:
-		return u.extractCommandMessage(update.Message)
+		return bot.extractCommandMessage(update.Message)
 	case update.EditedMessage != nil:
-		return u.extractCommandMessage(update.EditedMessage)
+		return bot.extractCommandMessage(update.EditedMessage)
 	case update.CallbackQuery != nil:
-		return u.extractCommandCallbackQuery(update.CallbackQuery)
+		return bot.extractCommandCallbackQuery(update.CallbackQuery)
 	}
 	return Command{}, false
 }
 
-func (u *UpdateAware) extractCommandMessage(message *Message) (cmd Command, ok bool) {
+func (bot *Bot) extractCommandMessage(message *Message) (cmd Command, ok bool) {
 	for _, entity := range message.Entities {
 		if entity.Type == "bot_command" {
 			key := message.Text[entity.Offset : entity.Offset+entity.Length]
 			at := strings.Index(key, "@")
-			if at > 0 && len(key) > at && u.Username() == key[at+1:] {
+			if at > 0 && len(key) > at && bot.Username() == key[at+1:] {
 				key = key[:at]
 			}
 			cmd.User = &message.From
@@ -160,7 +222,7 @@ func (u *UpdateAware) extractCommandMessage(message *Message) (cmd Command, ok b
 	return
 }
 
-func (u *UpdateAware) extractCommandCallbackQuery(query *CallbackQuery) (cmd Command, ok bool) {
+func (bot *Bot) extractCommandCallbackQuery(query *CallbackQuery) (cmd Command, ok bool) {
 	if query.Data == nil {
 		return
 	}
@@ -179,9 +241,9 @@ func (u *UpdateAware) extractCommandCallbackQuery(query *CallbackQuery) (cmd Com
 	return
 }
 
-func (u *UpdateAware) Close() {
-	u.cancel()
-	u.work.Wait()
+func (bot *Bot) Close() {
+	bot.cancel()
+	bot.work.Wait()
 }
 
 // Command is a text bot command.
