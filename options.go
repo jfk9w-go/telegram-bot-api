@@ -29,7 +29,7 @@ type SendOptions struct {
 
 func (o *SendOptions) body(chatID ChatID, item sendable) (flu.EncoderTo, error) {
 	isMediaGroup := item.kind() == "mediaGroup"
-	form := fluhttp.Form{}
+	form := new(fluhttp.Form)
 	if !isMediaGroup {
 		form = form.Value(item)
 	}
@@ -60,5 +60,5 @@ type AnswerCallbackQueryOptions struct {
 }
 
 func (o *AnswerCallbackQueryOptions) body(id string) flu.EncoderTo {
-	return fluhttp.Form{}.Value(o).Add("callback_query_id", id)
+	return new(fluhttp.Form).Value(o).Add("callback_query_id", id)
 }

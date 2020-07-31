@@ -9,28 +9,30 @@ import (
 
 type Question chan *Message
 
-type Client = *conversationAwareClient
+type Sender interface {
+	Send(ctx context.Context, chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error)
+}
 
-type conversationAwareClient struct {
-	*floodControlAwareClient
+type ConversationAware struct {
+	sender    Sender
 	questions map[ID]Question
 	mutex     sync.RWMutex
 }
 
-func newConversationAwareClient(fca *floodControlAwareClient) Client {
-	return &conversationAwareClient{
-		floodControlAwareClient: fca,
-		questions:               make(map[ID]Question),
+func Conversations(sender Sender) *ConversationAware {
+	return &ConversationAware{
+		sender:    sender,
+		questions: make(map[ID]Question),
 	}
 }
 
-func (c *conversationAwareClient) Ask(ctx context.Context, chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error) {
+func (c *ConversationAware) Ask(ctx context.Context, chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error) {
 	if options == nil {
 		options = new(SendOptions)
 	}
 
 	options.ReplyMarkup = ForceReply{ForceReply: true, Selective: true}
-	m, err := c.Send(ctx, chatID, sendable, options)
+	m, err := c.sender.Send(ctx, chatID, sendable, options)
 	if err != nil {
 		return nil, errors.Wrap(err, "send question")
 	}
@@ -46,7 +48,7 @@ func (c *conversationAwareClient) Ask(ctx context.Context, chatID ChatID, sendab
 	}
 }
 
-func (c *conversationAwareClient) Answer(message *Message) bool {
+func (c *ConversationAware) Answer(message *Message) bool {
 	if message.ReplyToMessage != nil {
 		c.mutex.RLock()
 		question, ok := c.questions[message.ReplyToMessage.ID]
@@ -60,7 +62,7 @@ func (c *conversationAwareClient) Answer(message *Message) bool {
 	return false
 }
 
-func (c *conversationAwareClient) addQuestion(id ID) Question {
+func (c *ConversationAware) addQuestion(id ID) Question {
 	question := make(Question)
 	c.mutex.Lock()
 	c.questions[id] = question
@@ -68,7 +70,7 @@ func (c *conversationAwareClient) addQuestion(id ID) Question {
 	return question
 }
 
-func (c *conversationAwareClient) removeQuestion(id ID) {
+func (c *ConversationAware) removeQuestion(id ID) {
 	c.mutex.Lock()
 	delete(c.questions, id)
 	c.mutex.Unlock()

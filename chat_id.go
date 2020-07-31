@@ -4,7 +4,7 @@ import (
 	"strconv"
 )
 
-// ID is an BaseSendable identifier (chat, message, user, etc.)
+// ID is an item identifier (chat, message, user, etc.)
 type ID int64
 
 // ParseID tries to parse a value as ID.

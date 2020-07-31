@@ -11,17 +11,21 @@ import (
 	"github.com/pkg/errors"
 )
 
-type floodControlAwareClient struct {
-	api
+type Executor interface {
+	Execute(ctx context.Context, method string, body flu.EncoderTo, resp interface{}) error
+}
+
+type FloodControlAware struct {
+	executor    Executor
 	maxRetries  int
 	rateLimiter flu.RateLimiter
 	recipients  map[ChatID]flu.RateLimiter
 	mutex       sync.RWMutex
 }
 
-func newFloodControlAwareClient(api api, maxRetries int) *floodControlAwareClient {
-	return &floodControlAwareClient{
-		api:         api,
+func FloodControl(executor Executor, maxRetries int) *FloodControlAware {
+	return &FloodControlAware{
+		executor:    executor,
 		maxRetries:  maxRetries,
 		rateLimiter: flu.IntervalRateLimiter(GatewaySendDelay),
 		recipients:  make(map[ChatID]flu.RateLimiter),
@@ -30,12 +34,13 @@ func newFloodControlAwareClient(api api, maxRetries int) *floodControlAwareClien
 
 var errUnknownRecipient = errors.New("unknown recipient")
 
-func (c *floodControlAwareClient) send(ctx context.Context, chatID ChatID, item sendable, options *SendOptions, resp interface{}) error {
+func (c *FloodControlAware) send(ctx context.Context, chatID ChatID, item sendable, options *SendOptions, resp interface{}) error {
 	body, err := options.body(chatID, item)
 	if err != nil {
 		return errors.Wrap(err, "failed to write send data")
 	}
-	url := c.method("/send" + strings.Title(item.kind()))
+
+	method := "/send" + strings.Title(item.kind())
 	c.mutex.RLock()
 	limiter, exists := c.recipients[chatID]
 	c.mutex.RUnlock()
@@ -45,12 +50,13 @@ func (c *floodControlAwareClient) send(ctx context.Context, chatID ChatID, item 
 		}
 		defer limiter.Complete()
 	}
+
 	if err := c.rateLimiter.Start(ctx); err != nil {
 		return err
 	}
 	defer c.rateLimiter.Complete()
 	for i := 0; i <= c.maxRetries; i++ {
-		err = c.api.send(ctx, url, body, resp)
+		err = c.executor.Execute(ctx, method, body, resp)
 		var timeout time.Duration
 		switch err := err.(type) {
 		case nil:
@@ -77,7 +83,7 @@ func (c *floodControlAwareClient) send(ctx context.Context, chatID ChatID, item 
 	return err
 }
 
-func (c *floodControlAwareClient) newRecipient(chat *Chat) {
+func (c *FloodControlAware) newRecipient(chat *Chat) {
 	c.mutex.Lock()
 	if _, ok := c.recipients[chat.ID]; !ok {
 		rateLimiter := flu.IntervalRateLimiter(SendDelays[chat.Type])
@@ -98,7 +104,7 @@ func (c *floodControlAwareClient) newRecipient(chat *Chat) {
 //   https://core.telegram.org/bots/api#sendaudio
 //   https://core.telegram.org/bots/api#sendvoice
 //   https://core.telegram.org/bots/api#sendsticker
-func (c *floodControlAwareClient) Send(ctx context.Context, chatID ChatID, item Sendable, options *SendOptions) (*Message, error) {
+func (c *FloodControlAware) Send(ctx context.Context, chatID ChatID, item Sendable, options *SendOptions) (*Message, error) {
 	m := new(Message)
 	err := c.send(ctx, chatID, item, options, m)
 	if err == errUnknownRecipient {
@@ -111,7 +117,7 @@ func (c *floodControlAwareClient) Send(ctx context.Context, chatID ChatID, item 
 // Use this method to send a group of photos or videos as an album.
 // On success, an array of the workers Messages is returned.
 // See https://core.telegram.org/bots/api#sendmediagroup
-func (c *floodControlAwareClient) SendMediaGroup(ctx context.Context, chatID ChatID, media []Media, options *SendOptions) ([]Message, error) {
+func (c *FloodControlAware) SendMediaGroup(ctx context.Context, chatID ChatID, media []Media, options *SendOptions) ([]Message, error) {
 	ms := make([]Message, 0)
 	err := c.send(ctx, chatID, MediaGroup(media), options, &ms)
 	if err == errUnknownRecipient {
