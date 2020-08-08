@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/jfk9w-go/flu"
 	fluhttp "github.com/jfk9w-go/flu/http"
 )
@@ -45,6 +43,7 @@ type Bot struct {
 	cancel func()
 	me     *User
 	work   sync.WaitGroup
+	once   sync.Once
 }
 
 func NewBot(client *fluhttp.Client, token string, sendRetries int) *Bot {
@@ -62,28 +61,24 @@ func NewBot(client *fluhttp.Client, token string, sendRetries int) *Bot {
 }
 
 func (bot *Bot) Listen(options *GetUpdatesOptions) <-chan Update {
-	me, err := bot.GetMe(bot.ctx)
-	if err != nil {
-		panic(errors.Wrap(err, "getMe"))
-	}
-
-	bot.me = me
 	channel := make(chan Update)
+	ctx, cancel := context.WithCancel(bot.ctx)
 	bot.work.Add(1)
-	go func(bot *Bot) {
+	go func(ctx context.Context, cancel func(), bot *Bot) {
 		defer func() {
 			close(channel)
+			cancel()
 			bot.work.Done()
 		}()
 
 		for {
-			updates, err := bot.GetUpdates(bot.ctx, options)
-			if bot.ctx.Err() != nil {
+			updates, err := bot.GetUpdates(ctx, options)
+			if ctx.Err() != nil {
 				return
 			} else if err != nil {
 				log.Printf("%s poll error: %s", bot.Username(), err)
 				select {
-				case <-bot.ctx.Done():
+				case <-ctx.Done():
 					return
 				case <-time.After(time.Duration(options.TimeoutSecs) * time.Second):
 					continue
@@ -95,7 +90,7 @@ func (bot *Bot) Listen(options *GetUpdatesOptions) <-chan Update {
 					// already answered
 				} else {
 					select {
-					case <-bot.ctx.Done():
+					case <-ctx.Done():
 						return
 					case channel <- update:
 					}
@@ -104,12 +99,22 @@ func (bot *Bot) Listen(options *GetUpdatesOptions) <-chan Update {
 				options.Offset = update.ID.Increment()
 			}
 		}
-	}(bot)
+	}(ctx, cancel, bot)
 
 	return channel
 }
 
 func (bot *Bot) Username() string {
+	bot.once.Do(func() {
+		ctx, cancel := context.WithTimeout(bot.ctx, time.Minute)
+		defer cancel()
+		if me, err := bot.GetMe(ctx); err != nil {
+			panic(err)
+		} else {
+			bot.me = me
+		}
+	})
+
 	return bot.me.Username.String()
 }
 
@@ -135,27 +140,18 @@ type CommandListener interface {
 	OnCommand(ctx context.Context, client Client, cmd Command) error
 }
 
-func (bot *Bot) CommandListener(options *GetUpdatesOptions, rateLimiter flu.RateLimiter, listener CommandListener) *Bot {
-	if rateLimiter == nil {
-		rateLimiter = flu.RateUnlimiter
-	}
-
+func (bot *Bot) CommandListener(options *GetUpdatesOptions, listener CommandListener) *Bot {
 	commands := bot.Commands(options)
 	log.Printf("%s is running", bot.Username())
 	bot.work.Add(1)
 	go func(bot *Bot) {
 		defer bot.work.Done()
 		for cmd := range commands {
-			if rateLimiter.Start(bot.ctx) != nil {
-				return
-			}
-
 			ctx, cancel := context.WithCancel(bot.ctx)
 			bot.work.Add(1)
 			go func(ctx context.Context, cancel func(), bot *Bot, cmd Command) {
 				defer func() {
 					cancel()
-					rateLimiter.Complete()
 					bot.work.Done()
 				}()
 
@@ -183,8 +179,8 @@ func (fun CommandListenerFunc) OnCommand(ctx context.Context, client Client, cmd
 	return fun(ctx, client, cmd)
 }
 
-func (bot *Bot) CommandListenerFunc(options *GetUpdatesOptions, rateLimiter flu.RateLimiter, fun CommandListenerFunc) *Bot {
-	return bot.CommandListener(options, rateLimiter, fun)
+func (bot *Bot) CommandListenerFunc(options *GetUpdatesOptions, fun CommandListenerFunc) *Bot {
+	return bot.CommandListener(options, fun)
 }
 
 func (bot *Bot) extractCommand(update Update) (Command, bool) {

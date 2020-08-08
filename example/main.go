@@ -12,16 +12,22 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jfk9w-go/telegram-bot-api/richtext"
-
-	"github.com/pkg/errors"
-
 	"github.com/jfk9w-go/flu"
 	fluhttp "github.com/jfk9w-go/flu/http"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
+	"github.com/pkg/errors"
 )
 
-func CommandListenerFunc(ctx context.Context, bot telegram.Client, cmd telegram.Command) (err error) {
+type CommandListener struct {
+	flu.RateLimiter
+}
+
+func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd telegram.Command) (err error) {
+	if err := l.Start(ctx); err != nil {
+		return err
+	}
+	defer l.Complete()
+
 	switch cmd.Key {
 	case "/greet":
 		_, err = bot.Send(ctx, cmd.Chat.ID,
@@ -30,15 +36,9 @@ func CommandListenerFunc(ctx context.Context, bot telegram.Client, cmd telegram.
 	case "/tick":
 		_, err = bot.Send(ctx, cmd.Chat.ID,
 			telegram.Media{
-				Type:  telegram.MediaTypeByMIMEType("image/jpeg"),
-				Input: flu.File("tick.png"),
-				Caption: richtext.HTML(-1, 1, nil, nil).
-					Text("Here's a ").
-					StartTag("b", nil).
-					Text("tick").
-					EndTag().
-					Text(" for ya.").
-					Flush().First(),
+				Type:      telegram.MediaTypeByMIMEType("image/jpeg"),
+				Input:     flu.File("tick.png"),
+				Caption:   "Here's a <b>tick</b> for ya!",
 				ParseMode: telegram.HTML},
 			&telegram.SendOptions{DisableNotification: true})
 	case "/gif":
@@ -137,10 +137,9 @@ func main() {
 	defer telegram.NewBot(fluhttp.NewTransport().
 		ResponseHeaderTimeout(2*time.Minute).
 		NewClient(), os.Args[1], 3).
-		CommandListenerFunc(
+		CommandListener(
 			&telegram.GetUpdatesOptions{TimeoutSecs: 60},
-			flu.ConcurrencyRateLimiter(1),
-			CommandListenerFunc).
+			CommandListener{flu.IntervalRateLimiter(10 * time.Second)}).
 		Close()
 	flu.AwaitSignal(syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
 }

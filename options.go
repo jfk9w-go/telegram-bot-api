@@ -28,9 +28,9 @@ type SendOptions struct {
 }
 
 func (o *SendOptions) body(chatID ChatID, item sendable) (flu.EncoderTo, error) {
-	isMediaGroup := item.kind() == "mediaGroup"
+	mediaGroup := item.kind() == "mediaGroup"
 	form := new(fluhttp.Form)
-	if !isMediaGroup {
+	if !mediaGroup {
 		form = form.Value(item)
 	}
 	form = form.Set("chat_id", chatID.queryParam())
@@ -41,10 +41,10 @@ func (o *SendOptions) body(chatID ChatID, item sendable) (flu.EncoderTo, error) 
 		if o.ReplyToMessageID != 0 {
 			form = form.Set("reply_to_message_id", o.ReplyToMessageID.queryParam())
 		}
-		if !isMediaGroup && o.ReplyMarkup != nil {
+		if !mediaGroup && o.ReplyMarkup != nil {
 			bytes, err := json.Marshal(o.ReplyMarkup)
 			if err != nil {
-				return nil, errors.Wrap(err, "failed to serialize reply_markup")
+				return nil, errors.Wrap(err, "serialize reply_markup")
 			}
 			form = form.Set("reply_markup", string(bytes))
 		}

@@ -17,7 +17,7 @@ const (
 	MaxCaptionSize = 1024
 )
 
-// Type of chat, can be either “private”, “group”, “supergroup” or “updateChannel”
+// Type of chat, can be either “private”, “group”, “supergroup” or “channel”
 type ChatType string
 
 const (
@@ -48,6 +48,10 @@ type (
 		AllMembersAreAdministrators bool      `json:"all_members_are_administrators"`
 	}
 
+	MessageFile struct {
+		ID string `json:"file_id"`
+	}
+
 	// See https://core.telegram.org/bots/api#message
 	Message struct {
 		ID             ID              `json:"message_id"`
@@ -57,6 +61,9 @@ type (
 		Text           string          `json:"text"`
 		Entities       []MessageEntity `json:"entities"`
 		ReplyToMessage *Message        `json:"reply_to_message"`
+		Photo          []MessageFile   `json:"photo"`
+		Video          *MessageFile    `json:"video"`
+		Animation      *MessageFile    `json:"animation"`
 	}
 
 	// See https://core.telegram.org/bots/api#messageentity
