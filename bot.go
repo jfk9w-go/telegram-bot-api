@@ -46,9 +46,13 @@ type Bot struct {
 	once   sync.Once
 }
 
-func NewBot(client *fluhttp.Client, token string, sendRetries int) *Bot {
-	base := NewBaseClient(client, token)
-	floodControl := FloodControl(base, sendRetries)
+func NewBot(client *fluhttp.Client, token string) *Bot {
+	return NewBotWithEndpoint(client, token, nil)
+}
+
+func NewBotWithEndpoint(client *fluhttp.Client, token string, endpoint EndpointFunc) *Bot {
+	base := NewBaseClientWithEndpoint(client, token, endpoint)
+	floodControl := FloodControl(base)
 	conversations := Conversations(floodControl)
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Bot{
@@ -165,7 +169,7 @@ func (bot *Bot) CommandListener(options *GetUpdatesOptions, listener CommandList
 							bot.Username(), err.Error(), cmd.Chat.ID, sendErr.Error())
 					}
 				} else {
-					log.Printf("%s processed %s from %d ok", bot.Username(), cmd.Key, cmd.User.ID)
+					log.Printf(`%s processed "%s %s" from %d ok`, bot.Username(), cmd.Key, cmd.Payload, cmd.User.ID)
 				}
 			}(ctx, cancel, bot, cmd)
 		}

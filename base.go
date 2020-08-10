@@ -11,10 +11,7 @@ import (
 // BaseClient is the Telegram Bot API client implementation.
 // It can not be instantiated by package users.
 // Instead, it should be used as part of Bot.
-type BaseClient struct {
-	client  *fluhttp.Client
-	baseURI string
-}
+type BaseClient func(string) *fluhttp.Request
 
 var ValidStatusCodes = []int{
 	http.StatusOK,
@@ -27,17 +24,28 @@ var ValidStatusCodes = []int{
 	http.StatusInternalServerError,
 }
 
+type EndpointFunc func(token, method string) string
+
+var DefaultEndpoint EndpointFunc = func(token, method string) string {
+	return "https://api.telegram.org/bot" + token + "/" + method
+}
+
 func NewBaseClient(client *fluhttp.Client, token string) BaseClient {
+	return NewBaseClientWithEndpoint(client, token, DefaultEndpoint)
+}
+
+func NewBaseClientWithEndpoint(client *fluhttp.Client, token string, endpoint EndpointFunc) BaseClient {
 	if token == "" {
 		panic("token must not be empty")
 	}
 	if client == nil {
 		client = fluhttp.NewClient(http.DefaultClient)
 	}
-	return BaseClient{
-		client:  client.AcceptStatus(ValidStatusCodes...),
-		baseURI: "https://api.telegram.org/bot" + token,
+	client = client.AcceptStatus(ValidStatusCodes...)
+	if endpoint == nil {
+		endpoint = DefaultEndpoint
 	}
+	return func(method string) *fluhttp.Request { return client.POST(endpoint(token, method)) }
 }
 
 // Use this method to receive incoming updates using long polling.
@@ -45,7 +53,7 @@ func NewBaseClient(client *fluhttp.Client, token string) BaseClient {
 // See https://core.telegram.org/bots/api#getupdates
 func (c BaseClient) GetUpdates(ctx context.Context, options *GetUpdatesOptions) ([]Update, error) {
 	updates := make([]Update, 0)
-	return updates, c.Execute(ctx, "/getUpdates", flu.JSON{options}, &updates)
+	return updates, c.Execute(ctx, "getUpdates", flu.JSON{options}, &updates)
 }
 
 // A simple method for testing your bot's auth token. Requires no parameters.
@@ -53,7 +61,7 @@ func (c BaseClient) GetUpdates(ctx context.Context, options *GetUpdatesOptions) 
 // See https://core.telegram.org/bots/api#getme
 func (c BaseClient) GetMe(ctx context.Context) (*User, error) {
 	user := new(User)
-	return user, c.Execute(ctx, "/getMe", nil, user)
+	return user, c.Execute(ctx, "getMe", nil, user)
 }
 
 // Use this method to delete a message, including service messages, with the following limitations:
@@ -70,7 +78,7 @@ func (c BaseClient) DeleteMessage(ctx context.Context, chatID ChatID, messageID 
 		Set("chat_id", chatID.queryParam()).
 		Set("message_id", messageID.queryParam())
 	var ok bool
-	return ok, c.Execute(ctx, "/deleteMessage", body, &ok)
+	return ok, c.Execute(ctx, "deleteMessage", body, &ok)
 }
 
 // Use this method to get up to date information about the chat (current name of
@@ -81,7 +89,7 @@ func (c BaseClient) GetChat(ctx context.Context, chatID ChatID) (*Chat, error) {
 	body := new(fluhttp.Form).
 		Set("chat_id", chatID.queryParam())
 	chat := new(Chat)
-	return chat, c.Execute(ctx, "/getChat", body, chat)
+	return chat, c.Execute(ctx, "getChat", body, chat)
 }
 
 // Use this method to get a list of administrators in a chat.
@@ -93,7 +101,7 @@ func (c BaseClient) GetChatAdministrators(ctx context.Context, chatID ChatID) ([
 	body := new(fluhttp.Form).
 		Set("chat_id", chatID.queryParam())
 	members := make([]ChatMember, 0)
-	return members, c.Execute(ctx, "/getChatAdministrators", body, &members)
+	return members, c.Execute(ctx, "getChatAdministrators", body, &members)
 }
 
 // Use this method to get information about a member of a chat.
@@ -104,7 +112,7 @@ func (c BaseClient) GetChatMember(ctx context.Context, chatID ChatID, userID ID)
 		Set("chat_id", chatID.queryParam()).
 		Set("user_id", userID.queryParam())
 	member := new(ChatMember)
-	return member, c.Execute(ctx, "/getChatMember", body, member)
+	return member, c.Execute(ctx, "getChatMember", body, member)
 }
 
 // Use this method to send answers to callback queries sent from inline keyboards.
@@ -113,19 +121,14 @@ func (c BaseClient) GetChatMember(ctx context.Context, chatID ChatID, userID ID)
 // https://core.telegram.org/bots/api#answercallbackquery
 func (c BaseClient) AnswerCallbackQuery(ctx context.Context, id string, options *AnswerCallbackQueryOptions) (bool, error) {
 	var ok bool
-	return ok, c.Execute(ctx, "/answerCallbackQuery", options.body(id), &ok)
+	return ok, c.Execute(ctx, "answerCallbackQuery", options.body(id), &ok)
 }
 
 func (c BaseClient) Execute(ctx context.Context, method string, body flu.EncoderTo, resp interface{}) error {
-	return c.client.
-		POST(c.method(method)).
+	return c(method).
 		BodyEncoder(body).
 		Context(ctx).
 		Execute().
 		DecodeBody(newResponse(resp)).
 		Error
-}
-
-func (c BaseClient) method(method string) string {
-	return c.baseURI + method
 }

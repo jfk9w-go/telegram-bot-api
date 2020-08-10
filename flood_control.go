@@ -11,22 +11,22 @@ import (
 	"github.com/pkg/errors"
 )
 
+var MaxSendRetries = 3
+
 type Executor interface {
 	Execute(ctx context.Context, method string, body flu.EncoderTo, resp interface{}) error
 }
 
 type FloodControlAware struct {
 	executor    Executor
-	maxRetries  int
 	rateLimiter flu.RateLimiter
 	recipients  map[ChatID]flu.RateLimiter
 	mutex       sync.RWMutex
 }
 
-func FloodControl(executor Executor, maxRetries int) *FloodControlAware {
+func FloodControl(executor Executor) *FloodControlAware {
 	return &FloodControlAware{
 		executor:    executor,
-		maxRetries:  maxRetries,
 		rateLimiter: flu.IntervalRateLimiter(GatewaySendDelay),
 		recipients:  make(map[ChatID]flu.RateLimiter),
 	}
@@ -40,7 +40,7 @@ func (c *FloodControlAware) send(ctx context.Context, chatID ChatID, item sendab
 		return errors.Wrap(err, "failed to write send data")
 	}
 
-	method := "/send" + strings.Title(item.kind())
+	method := "send" + strings.Title(item.kind())
 	c.mutex.RLock()
 	limiter, exists := c.recipients[chatID]
 	c.mutex.RUnlock()
@@ -55,7 +55,7 @@ func (c *FloodControlAware) send(ctx context.Context, chatID ChatID, item sendab
 		return err
 	}
 	defer c.rateLimiter.Complete()
-	for i := 0; i <= c.maxRetries; i++ {
+	for i := 0; i <= MaxSendRetries; i++ {
 		err = c.executor.Execute(ctx, method, body, resp)
 		var timeout time.Duration
 		switch err := err.(type) {

@@ -136,7 +136,7 @@ func main() {
 	// Create a bot instance.
 	defer telegram.NewBot(fluhttp.NewTransport().
 		ResponseHeaderTimeout(2*time.Minute).
-		NewClient(), os.Args[1], 3).
+		NewClient(), os.Args[1]).
 		CommandListener(
 			&telegram.GetUpdatesOptions{TimeoutSecs: 60},
 			CommandListener{flu.IntervalRateLimiter(10 * time.Second)}).
