@@ -8,11 +8,12 @@ type Client interface {
 	GetChat(ctx context.Context, chatID ChatID) (*Chat, error)
 	GetChatAdministrators(ctx context.Context, chatID ChatID) ([]ChatMember, error)
 	GetChatMember(ctx context.Context, chatID ChatID, userID ID) (*ChatMember, error)
-	AnswerCallbackQuery(ctx context.Context, id string, options *AnswerCallbackQueryOptions) (bool, error)
+	AnswerCallbackQuery(ctx context.Context, id string, options AnswerCallbackQueryOptions) (bool, error)
 	Send(ctx context.Context, chatID ChatID, item Sendable, options *SendOptions) (*Message, error)
 	SendMediaGroup(ctx context.Context, chatID ChatID, media []Media, options *SendOptions) ([]Message, error)
 	Ask(ctx context.Context, chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error)
 	Answer(message *Message) bool
+	Username() string
 }
 
 func InlineKeyboard(rows ...[][3]string) ReplyMarkup {
@@ -22,7 +23,7 @@ func InlineKeyboard(rows ...[][3]string) ReplyMarkup {
 		for j, button := range row {
 			keyboard[i][j] = InlineKeyboardButton{
 				Text:         button[0],
-				CallbackData: button[1] + ":" + button[2],
+				CallbackData: button[1] + " " + button[2],
 			}
 		}
 	}

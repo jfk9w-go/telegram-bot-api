@@ -8,7 +8,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -67,17 +66,17 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 			}
 		}
 	case "/secret":
-		if fields := strings.Fields(cmd.Payload); len(fields) != 2 {
+		if len(cmd.Args) != 2 {
 			return errors.New("usage: /secret Hi 5")
-		} else if secs, err := strconv.Atoi(fields[1]); err != nil || secs <= 0 {
+		} else if secs, err := strconv.Atoi(cmd.Args[1]); err != nil || secs <= 0 {
 			return errors.New("secs must be a positive integer")
-		} else if m, err := bot.Send(ctx, cmd.Chat.ID, telegram.Text{Text: fields[0]}, nil); err != nil {
+		} else if m, err := bot.Send(ctx, cmd.Chat.ID, telegram.Text{Text: cmd.Args[0]}, nil); err != nil {
 			return errors.Wrap(err, "send")
 		} else {
 			timer := time.NewTimer(time.Duration(secs) * time.Second)
 			select {
 			case <-ctx.Done():
-				if timer.Stop() {
+				if !timer.Stop() {
 					<-timer.C
 				}
 				return ctx.Err()
@@ -86,14 +85,13 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 				if ok, err := bot.DeleteMessage(ctx, m.Chat.ID, m.ID); err != nil {
 					return errors.Wrap(err, "delete")
 				} else if ok {
-					log.Printf("message %s deleted: %v", m.ID.String(), ok)
 					return nil
 				}
 			}
 		}
 	case "/say":
 		if cmd.Payload == "" {
-			return errors.New("specify a word")
+			return errors.New("specify a phrase")
 		} else if _, err := bot.Send(ctx, cmd.Chat.ID,
 			telegram.Text{Text: "Here you go."},
 			&telegram.SendOptions{
@@ -116,6 +114,8 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 			&telegram.SendOptions{ReplyToMessageID: reply.ID}); err != nil {
 			return errors.Wrap(err, "answer")
 		}
+	default:
+		return errors.New("invalid command")
 	}
 	return nil
 }
@@ -137,9 +137,7 @@ func main() {
 	defer telegram.NewBot(fluhttp.NewTransport().
 		ResponseHeaderTimeout(2*time.Minute).
 		NewClient(), os.Args[1]).
-		CommandListener(
-			&telegram.GetUpdatesOptions{TimeoutSecs: 60},
-			CommandListener{flu.IntervalRateLimiter(10 * time.Second)}).
+		CommandListener(CommandListener{RateLimiter: flu.ConcurrencyRateLimiter(5)}).
 		Close()
 	flu.AwaitSignal(syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
 }

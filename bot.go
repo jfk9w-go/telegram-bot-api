@@ -2,6 +2,8 @@ package telegram
 
 import (
 	"context"
+	"encoding/csv"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -64,48 +66,49 @@ func NewBotWithEndpoint(client *fluhttp.Client, token string, endpoint EndpointF
 	}
 }
 
-func (bot *Bot) Listen(options *GetUpdatesOptions) <-chan Update {
+func (bot *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 	channel := make(chan Update)
 	ctx, cancel := context.WithCancel(bot.ctx)
 	bot.work.Add(1)
-	go func(ctx context.Context, cancel func(), bot *Bot) {
-		defer func() {
-			close(channel)
-			cancel()
-			bot.work.Done()
-		}()
+	go bot.runUpdateListener(ctx, cancel, options, channel)
+	return channel
+}
 
-		for {
-			updates, err := bot.GetUpdates(ctx, options)
-			if ctx.Err() != nil {
+func (bot *Bot) runUpdateListener(ctx context.Context, cancel func(), options GetUpdatesOptions, channel chan<- Update) {
+	defer func() {
+		close(channel)
+		cancel()
+		bot.work.Done()
+	}()
+
+	for {
+		updates, err := bot.GetUpdates(ctx, options)
+		if ctx.Err() != nil {
+			return
+		} else if err != nil {
+			log.Printf("%s poll error: %s", bot.Username(), err)
+			select {
+			case <-ctx.Done():
 				return
-			} else if err != nil {
-				log.Printf("%s poll error: %s", bot.Username(), err)
+			case <-time.After(time.Duration(options.TimeoutSecs) * time.Second):
+				continue
+			}
+		}
+
+		for _, update := range updates {
+			if update.Message != nil && bot.Answer(update.Message) {
+				// already answered
+			} else {
 				select {
 				case <-ctx.Done():
 					return
-				case <-time.After(time.Duration(options.TimeoutSecs) * time.Second):
-					continue
+				case channel <- update:
 				}
 			}
 
-			for _, update := range updates {
-				if update.Message != nil && bot.Answer(update.Message) {
-					// already answered
-				} else {
-					select {
-					case <-ctx.Done():
-						return
-					case channel <- update:
-					}
-				}
-
-				options.Offset = update.ID.Increment()
-			}
+			options.Offset = update.ID.Increment()
 		}
-	}(ctx, cancel, bot)
-
-	return channel
+	}
 }
 
 func (bot *Bot) Username() string {
@@ -122,59 +125,71 @@ func (bot *Bot) Username() string {
 	return bot.me.Username.String()
 }
 
-func (bot *Bot) Commands(options *GetUpdatesOptions) <-chan Command {
-	options.AllowedUpdates = []string{"message", "edited_message", "callback_query"}
+var DefaultCommandsOptions = &GetUpdatesOptions{
+	TimeoutSecs:    60,
+	AllowedUpdates: []string{"message", "edited_message", "callback_query"},
+}
+
+func (bot *Bot) Commands() <-chan Command {
 	channel := make(chan Command)
 	bot.work.Add(1)
-	go func(bot *Bot, updates <-chan Update) {
-		defer func() {
-			close(channel)
-			bot.work.Done()
-		}()
-		for update := range updates {
-			if cmd, ok := bot.extractCommand(update); ok {
-				channel <- cmd
-			}
-		}
-	}(bot, bot.Listen(options))
+	go bot.pipeCommands(bot.Listen(*DefaultCommandsOptions), channel)
 	return channel
+}
+
+func (bot *Bot) pipeCommands(updates <-chan Update, commands chan<- Command) {
+	defer func() {
+		close(commands)
+		bot.work.Done()
+	}()
+
+	for update := range updates {
+		if cmd, ok := bot.extractCommand(update); ok {
+			commands <- cmd
+		}
+	}
 }
 
 type CommandListener interface {
 	OnCommand(ctx context.Context, client Client, cmd Command) error
 }
 
-func (bot *Bot) CommandListener(options *GetUpdatesOptions, listener CommandListener) *Bot {
-	commands := bot.Commands(options)
+func (bot *Bot) CommandListener(listener CommandListener) *Bot {
+	commands := bot.Commands()
 	log.Printf("%s is running", bot.Username())
 	bot.work.Add(1)
-	go func(bot *Bot) {
-		defer bot.work.Done()
-		for cmd := range commands {
-			ctx, cancel := context.WithCancel(bot.ctx)
-			bot.work.Add(1)
-			go func(ctx context.Context, cancel func(), bot *Bot, cmd Command) {
-				defer func() {
-					cancel()
-					bot.work.Done()
-				}()
-
-				err := listener.OnCommand(ctx, bot, cmd)
-				if ctx.Err() != nil {
-					return
-				} else if err != nil {
-					log.Printf("%s processed %s from %d with error %s", bot.Username(), cmd.Key, cmd.User.ID, err)
-					if sendErr := cmd.Reply(ctx, bot, err.Error()); sendErr != nil {
-						log.Printf(`%s unable to send error reply "%s" to %s: %s`,
-							bot.Username(), err.Error(), cmd.Chat.ID, sendErr.Error())
-					}
-				} else {
-					log.Printf(`%s processed "%s %s" from %d ok`, bot.Username(), cmd.Key, cmd.Payload, cmd.User.ID)
-				}
-			}(ctx, cancel, bot, cmd)
-		}
-	}(bot)
+	go bot.runCommandListener(commands, listener)
 	return bot
+}
+
+func (bot *Bot) runCommandListener(commands <-chan Command, listener CommandListener) {
+	defer bot.work.Done()
+	for cmd := range commands {
+		ctx, cancel := context.WithCancel(bot.ctx)
+		bot.work.Add(1)
+		go bot.handleCommand(ctx, cancel, listener, cmd)
+	}
+}
+
+func (bot *Bot) handleCommand(ctx context.Context, cancel func(), listener CommandListener, cmd Command) {
+	defer func() {
+		cancel()
+		bot.work.Done()
+	}()
+
+	err := listener.OnCommand(ctx, bot, cmd)
+	if ctx.Err() != nil {
+		log.Printf(`%s => %s`, cmd, ctx.Err())
+		return
+	} else if err != nil {
+		log.Printf(`%s => %s`, cmd, err)
+		if sendErr := cmd.Reply(ctx, bot, err.Error()); sendErr != nil {
+			log.Printf(`%s unable to send error reply "%s" to %s: %s`,
+				bot.Username(), err.Error(), cmd.Chat.ID, sendErr.Error())
+		}
+	} else {
+		log.Printf(`%s => ok`, cmd)
+	}
 }
 
 type CommandListenerFunc func(context.Context, Client, Command) error
@@ -183,20 +198,34 @@ func (fun CommandListenerFunc) OnCommand(ctx context.Context, client Client, cmd
 	return fun(ctx, client, cmd)
 }
 
-func (bot *Bot) CommandListenerFunc(options *GetUpdatesOptions, fun CommandListenerFunc) *Bot {
-	return bot.CommandListener(options, fun)
+func (bot *Bot) CommandListenerFunc(fun CommandListenerFunc) *Bot {
+	return bot.CommandListener(fun)
 }
 
-func (bot *Bot) extractCommand(update Update) (Command, bool) {
+func (bot *Bot) extractCommand(update Update) (cmd Command, ok bool) {
 	switch {
 	case update.Message != nil:
-		return bot.extractCommandMessage(update.Message)
+		cmd, ok = bot.extractCommandMessage(update.Message)
 	case update.EditedMessage != nil:
-		return bot.extractCommandMessage(update.EditedMessage)
+		cmd, ok = bot.extractCommandMessage(update.EditedMessage)
 	case update.CallbackQuery != nil:
-		return bot.extractCommandCallbackQuery(update.CallbackQuery)
+		cmd, ok = bot.extractCommandCallbackQuery(update.CallbackQuery)
 	}
-	return Command{}, false
+
+	cmd.Payload = strings.Trim(cmd.Payload, " ")
+	if ok && cmd.Payload != "" {
+		reader := csv.NewReader(strings.NewReader(cmd.Payload))
+		reader.Comma = ' '
+		reader.TrimLeadingSpace = true
+		args, err := reader.Read()
+		if err != nil {
+			log.Printf("%s => failed to parse args: %s", cmd, err)
+		} else {
+			cmd.Args = args
+		}
+	}
+
+	return
 }
 
 func (bot *Bot) extractCommandMessage(message *Message) (cmd Command, ok bool) {
@@ -211,7 +240,7 @@ func (bot *Bot) extractCommandMessage(message *Message) (cmd Command, ok bool) {
 			cmd.Chat = &message.Chat
 			cmd.Message = message
 			cmd.Key = key
-			cmd.Payload = strings.Trim(message.Text[entity.Offset+entity.Length:], " ")
+			cmd.Payload = message.Text[entity.Offset+entity.Length:]
 			ok = true
 			return
 		}
@@ -224,7 +253,7 @@ func (bot *Bot) extractCommandCallbackQuery(query *CallbackQuery) (cmd Command, 
 		return
 	}
 	for i, c := range *query.Data {
-		if c == ':' && len(*query.Data) > i+1 {
+		if c == ' ' && len(*query.Data) > i+1 {
 			cmd.Chat = &query.Message.Chat
 			cmd.User = &query.From
 			cmd.Message = query.Message
@@ -250,15 +279,24 @@ type Command struct {
 	Message         *Message
 	Key             string
 	Payload         string
+	Args            []string
 	CallbackQueryID string
 }
 
 func (cmd Command) Reply(ctx context.Context, client Client, text string) error {
 	if cmd.CallbackQueryID != "" {
-		_, err := client.AnswerCallbackQuery(ctx, cmd.CallbackQueryID, &AnswerCallbackQueryOptions{Text: text})
+		_, err := client.AnswerCallbackQuery(ctx, cmd.CallbackQueryID, AnswerCallbackQueryOptions{Text: text})
 		return err
 	} else {
 		_, err := client.Send(ctx, cmd.Chat.ID, Text{Text: text}, &SendOptions{ReplyToMessageID: cmd.Message.ID})
 		return err
 	}
+}
+
+func (cmd Command) String() string {
+	str := fmt.Sprintf("[%s@%s] %s", cmd.User.ID, cmd.Chat.ID, cmd.Key)
+	if cmd.Payload != "" {
+		str += " " + cmd.Payload
+	}
+	return str
 }

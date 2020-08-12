@@ -51,7 +51,7 @@ func NewBaseClientWithEndpoint(client *fluhttp.Client, token string, endpoint En
 // Use this method to receive incoming updates using long polling.
 // An Array of Update objects is returned.
 // See https://core.telegram.org/bots/api#getupdates
-func (c BaseClient) GetUpdates(ctx context.Context, options *GetUpdatesOptions) ([]Update, error) {
+func (c BaseClient) GetUpdates(ctx context.Context, options GetUpdatesOptions) ([]Update, error) {
 	updates := make([]Update, 0)
 	return updates, c.Execute(ctx, "getUpdates", flu.JSON{options}, &updates)
 }
@@ -119,7 +119,7 @@ func (c BaseClient) GetChatMember(ctx context.Context, chatID ChatID, userID ID)
 // The answer will be displayed to the user as a notification at the top of the chat screen or as an alert.
 // On success, True is returned.
 // https://core.telegram.org/bots/api#answercallbackquery
-func (c BaseClient) AnswerCallbackQuery(ctx context.Context, id string, options *AnswerCallbackQueryOptions) (bool, error) {
+func (c BaseClient) AnswerCallbackQuery(ctx context.Context, id string, options AnswerCallbackQueryOptions) (bool, error) {
 	var ok bool
 	return ok, c.Execute(ctx, "answerCallbackQuery", options.body(id), &ok)
 }
