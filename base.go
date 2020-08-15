@@ -8,9 +8,6 @@ import (
 	fluhttp "github.com/jfk9w-go/flu/http"
 )
 
-// BaseClient is the Telegram Bot API client implementation.
-// It can not be instantiated by package users.
-// Instead, it should be used as part of Bot.
 type BaseClient func(string) *fluhttp.Request
 
 var ValidStatusCodes = []int{
