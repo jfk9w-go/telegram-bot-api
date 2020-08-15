@@ -110,7 +110,7 @@ func HTML(ctx context.Context, sender telegram.Sender, chatIDs ...telegram.ChatI
 	}
 }
 
-func (w *HTMLWriter) StartTag(name string, attrs []html.Attribute) *HTMLWriter {
+func (w *HTMLWriter) StartTag(name string, attrs HTMLAttributes) *HTMLWriter {
 	if w.err != nil || w.Session.Overflow {
 		return w
 	}
@@ -123,24 +123,23 @@ func (w *HTMLWriter) StartTag(name string, attrs []html.Attribute) *HTMLWriter {
 			parent: w.currTag,
 		}
 	default:
-		if w.currTag == nil {
-			if tag, ok := w.TagConverter.Get(name, attrs); ok {
-				if len(tag.Open)+len(tag.Close)+3 >= w.Session.Capacity() {
-					if err := w.Session.Break(); err != nil {
-						w.err = err
-						return w
-					}
+		if tag, ok := w.TagConverter.Get(name, attrs); ok {
+			if len(tag.Open)+len(tag.Close)+3 >= w.Session.Capacity() {
+				if err := w.Session.Break(); err != nil {
+					w.err = err
+					return w
 				}
-
-				w.Session.Write(tag.Open)
-				w.Session.Prefix += tag.Open
-				w.Session.Suffix = tag.Close + w.Session.Suffix
-				w.currTag = &tag
-				return w
 			}
-		}
 
-		w.currTag = &HTMLTag{parent: w.currTag}
+			w.Session.Write(tag.Open)
+			w.Session.Prefix += tag.Open
+			w.Session.Suffix = tag.Close + w.Session.Suffix
+			tag.parent = w.currTag
+			w.currTag = &tag
+			return w
+		} else {
+			w.currTag = &HTMLTag{parent: w.currTag}
+		}
 	}
 
 	return w

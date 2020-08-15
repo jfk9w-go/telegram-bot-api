@@ -49,7 +49,7 @@ func TestHTMLWriter_Markup(t *testing.T) {
 		AnchorFormat: htmlAnchorFormatFunc(func(text string, _ format.HTMLAttributes) string { return text }),
 	}
 
-	var markup = `<strong>Музыкальный webm mp4 тред</strong><br><em>Не нашел - создал</em><br>Делимся вкусами, ищем музыку, создаем, нарезаем, постим свои либо чужие музыкальные видео.<br>Рекомендации для самостоятельного поиска соусов: <b><a href="https:&#47;&#47;pastebin.com&#47;i32h11vd" target="_blank" rel="nofollow noopener noreferrer"><i>https:&#47;&#47;pastebin.com&#47;i32h11vd</i></a></b>`
+	var markup = `<strong>Музыкальный webm mp4 тред</strong><br><em>Не нашел - создал</em><br>Делимся вкусами, ищем музыку, создаем, нарезаем, постим свои либо чужие музыкальные видео.<br>Рекомендации для самостоятельного поиска соусов: <b><i><a href="https:&#47;&#47;pastebin.com&#47;i32h11vd" target="_blank" rel="nofollow noopener noreferrer">https:&#47;&#47;pastebin.com&#47;i32h11vd</a></i></b>`
 	assert.Nil(t, writer.MarkupString(markup).Flush())
 	assert.Equal(t, []string{
 		"<b>Музыкальный webm mp4 тред</b>\n<i>Не</i>",
@@ -57,6 +57,6 @@ func TestHTMLWriter_Markup(t *testing.T) {
 		"музыку, создаем, нарезаем, постим свои либо",
 		"чужие музыкальные видео.\nРекомендации для",
 		"самостоятельного поиска соусов: <b></b>",
-		"<b>https://pastebin.com/i32h11vd</b>",
+		"<b><i>https://pastebin.com/i32h11vd</i></b>",
 	}, transport.pages)
 }
