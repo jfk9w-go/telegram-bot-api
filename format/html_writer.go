@@ -131,9 +131,14 @@ func (w *HTMLWriter) StartTag(name string, attrs HTMLAttributes) *HTMLWriter {
 				}
 			}
 
-			w.Session.Write(tag.Open)
-			w.Session.Prefix += tag.Open
-			w.Session.Suffix = tag.Close + w.Session.Suffix
+			if w.currAnchor != nil {
+				w.currAnchor.text += tag.Open
+			} else {
+				w.Session.Write(tag.Open)
+				w.Session.Prefix += tag.Open
+				w.Session.Suffix = tag.Close + w.Session.Suffix
+			}
+
 			tag.parent = w.currTag
 			w.currTag = &tag
 			return w
@@ -151,7 +156,7 @@ func (w *HTMLWriter) Text(text string) *HTMLWriter {
 	}
 	text = html.EscapeString(text)
 	if w.currAnchor != nil {
-		w.currAnchor.text = text
+		w.currAnchor.text += html.EscapeString(text)
 	} else {
 		w.err = w.Session.Breakable(text)
 	}
@@ -173,9 +178,14 @@ func (w *HTMLWriter) EndTag() *HTMLWriter {
 		}
 
 	case w.currTag != nil:
-		w.Session.Write(w.currTag.Close)
-		w.Session.Prefix = w.Session.Prefix[:len(w.Session.Prefix)-len(w.currTag.Open)]
-		w.Session.Suffix = w.Session.Suffix[len(w.currTag.Close):]
+		if w.currAnchor != nil {
+			w.currAnchor.text += w.currTag.Close
+		} else {
+			w.Session.Write(w.currTag.Close)
+			w.Session.Prefix = w.Session.Prefix[:len(w.Session.Prefix)-len(w.currTag.Open)]
+			w.Session.Suffix = w.Session.Suffix[len(w.currTag.Close):]
+		}
+
 		w.currTag = w.currTag.parent
 	}
 
