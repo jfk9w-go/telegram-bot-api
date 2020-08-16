@@ -25,7 +25,7 @@ func (fun ClockFunc) Now() time.Time {
 
 var SQLite3TableName = "feed"
 
-type sqlBuilder interface {
+type SQLBuilder interface {
 	ToSQL() (string, []interface{}, error)
 }
 
@@ -63,50 +63,44 @@ func (s *SQLite3) Init(ctx context.Context) ([]SubID, error) {
 	if _, err := s.Database.ExecContext(ctx, sql); err != nil {
 		return nil, errors.Wrap(err, "create table")
 	}
-
 	sql = fmt.Sprintf(`
 	CREATE UNIQUE INDEX IF NOT EXISTS i__%s__id 
 	ON %s(id, type, sub_id)`, SQLite3TableName, SQLite3TableName)
 	if _, err := s.Database.ExecContext(ctx, sql); err != nil {
 		return nil, errors.Wrap(err, "create index")
 	}
-
 	activeSubs := make([]SubID, 0)
 	err := s.Select(goqu.DISTINCT("sub_id")).From(SQLite3TableName).ScanValsContext(ctx, &activeSubs)
 	if err != nil {
 		return nil, errors.Wrap(err, "select active subs")
 	}
-
 	return activeSubs, nil
 }
 
-func (s *SQLite3) execute(ctx context.Context, b sqlBuilder) (int64, error) {
-	sql, args, err := b.ToSQL()
+func (s *SQLite3) ExecuteSQLBuilder(ctx context.Context, builder SQLBuilder) (int64, error) {
+	sql, args, err := builder.ToSQL()
 	if err != nil {
 		return 0, errors.Wrap(err, "build sql")
 	}
-
 	result, err := s.Database.ExecContext(ctx, sql, args...)
 	if err != nil {
 		return 0, errors.Wrap(err, "execute")
 	}
-
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return 0, errors.Wrap(err, "rows affected")
 	}
-
 	return affected, nil
 }
 
-func (s *SQLite3) update(ctx context.Context, b sqlBuilder) (bool, error) {
-	affected, err := s.execute(ctx, b)
+func (s *SQLite3) UpdateSQLBuilder(ctx context.Context, builder SQLBuilder) (bool, error) {
+	affected, err := s.ExecuteSQLBuilder(ctx, builder)
 	return affected > 0, err
 }
 
 func (s *SQLite3) Create(ctx context.Context, feed Feed) error {
 	defer s.WLock().Unlock()
-	ok, err := s.update(ctx, s.Insert(SQLite3TableName).Rows(feed).OnConflict(goqu.DoNothing()))
+	ok, err := s.UpdateSQLBuilder(ctx, s.Insert(SQLite3TableName).Rows(feed).OnConflict(goqu.DoNothing()))
 	if err == nil && !ok {
 		err = ErrExists
 	}
@@ -163,7 +157,7 @@ func (s *SQLite3) List(ctx context.Context, subID SubID, active bool) ([]Feed, e
 
 func (s *SQLite3) Clear(ctx context.Context, subID SubID, pattern string) (int64, error) {
 	defer s.WLock().Unlock()
-	return s.execute(ctx, s.Database.Delete(SQLite3TableName).
+	return s.ExecuteSQLBuilder(ctx, s.Database.Delete(SQLite3TableName).
 		Where(goqu.And(
 			goqu.C("sub_id").Eq(subID),
 			goqu.C("error").Like(pattern),
@@ -172,7 +166,7 @@ func (s *SQLite3) Clear(ctx context.Context, subID SubID, pattern string) (int64
 
 func (s *SQLite3) Delete(ctx context.Context, id ID) error {
 	defer s.WLock().Unlock()
-	ok, err := s.update(ctx, s.Database.Delete(SQLite3TableName).Where(s.ByID(id)))
+	ok, err := s.UpdateSQLBuilder(ctx, s.Database.Delete(SQLite3TableName).Where(s.ByID(id)))
 	if err == nil && !ok {
 		err = ErrNotFound
 	}
@@ -196,7 +190,7 @@ func (s *SQLite3) Update(ctx context.Context, id ID, state State) error {
 		update["error"] = state.Error.Error()
 	}
 
-	ok, err := s.update(ctx, s.Database.Update(SQLite3TableName).Set(update).Where(where))
+	ok, err := s.UpdateSQLBuilder(ctx, s.Database.Update(SQLite3TableName).Set(update).Where(where))
 	if err == nil && !ok {
 		err = ErrNotFound
 	}
