@@ -60,3 +60,26 @@ func TestHTMLWriter_Markup(t *testing.T) {
 		"<b><i>https://pastebin.com/i32h11vd</i></b>",
 	}, transport.pages)
 }
+
+func TestHTMLWriter_Markup_Autofix(t *testing.T) {
+	transport := newTestTransport()
+	writer := &format.HTMLWriter{
+		Session: &format.Session{
+			Transport: transport,
+			PageSize:  45,
+		},
+		TagConverter: format.DefaultHTMLTagConverter,
+		AnchorFormat: htmlAnchorFormatFunc(func(text string, _ format.HTMLAttributes) string { return text }),
+	}
+
+	var markup = `<strong>Музыкальный webm mp4 тред</strong><br><em>Не нашел - создал<br>Делимся вкусами, ищем музыку, создаем, нарезаем, постим свои либо чужие музыкальные видео.<br>Рекомендации для самостоятельного поиска соусов: <a href="https:&#47;&#47;pastebin.com&#47;i32h11vd" target="_blank" rel="nofollow noopener noreferrer">https:&#47;&#47;pastebin.com&#47;i32h11vd</a></b>`
+	assert.Nil(t, writer.MarkupString(markup).Flush())
+	assert.Equal(t, []string{
+		"<b>Музыкальный webm mp4 тред</b>\n<i>Не</i>",
+		"<i>нашел - создал\nДелимся вкусами, ищем</i>",
+		"<i>музыку, создаем, нарезаем, постим свои</i>",
+		"<i>либо чужие музыкальные видео.\nРекоменд</i>",
+		"<i>ации для самостоятельного поиска</i>",
+		"<i>соусов: https://pastebin.com/i32h11vd</i>",
+	}, transport.pages)
+}

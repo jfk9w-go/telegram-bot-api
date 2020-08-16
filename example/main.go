@@ -47,7 +47,7 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 		_, err = bot.Send(ctx, cmd.Chat.ID,
 			telegram.Text{
 				ParseMode: telegram.HTML,
-				Text:      fmt.Sprintf(`Hello, <pre><b><a href="%s"><i>Google</i></a></b></pre>`, "https://www.google.com")},
+				Text:      fmt.Sprintf(`Hello, <i><pre><b><a href="%s"><i>Google</i></a></b></pre></i>`, "https://www.google.com")},
 			&telegram.SendOptions{ReplyToMessageID: cmd.Message.ID})
 	case "/tick":
 		err = format.HTML(ctx, bot, cmd.Chat.ID).
