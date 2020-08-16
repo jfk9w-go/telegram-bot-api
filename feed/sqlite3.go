@@ -5,12 +5,23 @@ import (
 	"database/sql"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/sqlite3"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 )
+
+type Clock interface {
+	Now() time.Time
+}
+
+type ClockFunc func() time.Time
+
+func (fun ClockFunc) Now() time.Time {
+	return fun()
+}
 
 var SQLite3TableName = "feed"
 
@@ -20,17 +31,22 @@ type sqlBuilder interface {
 
 type SQLite3 struct {
 	*goqu.Database
+	Clock
 	mu sync.RWMutex
 }
 
-func NewSQLite3(datasource string) (*SQLite3, error) {
+func NewSQLite3(clock Clock, datasource string) (*SQLite3, error) {
 	dialect := "sqlite3"
 	db, err := sql.Open(dialect, datasource)
 	if err != nil {
 		return nil, err
 	}
 
-	return &SQLite3{Database: goqu.New(dialect, db)}, nil
+	if clock == nil {
+		clock = ClockFunc(time.Now)
+	}
+
+	return &SQLite3{Database: goqu.New(dialect, db), Clock: clock}, nil
 }
 
 func (s *SQLite3) Init(ctx context.Context) ([]SubID, error) {
@@ -41,7 +57,7 @@ func (s *SQLite3) Init(ctx context.Context) ([]SubID, error) {
 	  sub_id INTEGER NOT NULL,
       name VARCHAR(255) NOT NULL,
 	  data TEXT,
-	  updated_at TEXT,
+	  updated_at TIMESTAMP,
 	  error VARCHAR(255)
 	)`, SQLite3TableName)
 	if _, err := s.Database.ExecContext(ctx, sql); err != nil {
@@ -157,6 +173,30 @@ func (s *SQLite3) Clear(ctx context.Context, subID SubID, pattern string) (int64
 func (s *SQLite3) Delete(ctx context.Context, id ID) error {
 	defer s.WLock().Unlock()
 	ok, err := s.update(ctx, s.Database.Delete(SQLite3TableName).Where(s.ByID(id)))
+	if err == nil && !ok {
+		err = ErrNotFound
+	}
+
+	return err
+}
+
+func (s *SQLite3) Update(ctx context.Context, id ID, state State) error {
+	defer s.WLock().Unlock()
+	where := s.ByID(id)
+	update := map[string]interface{}{"updated_at": s.Now()}
+	switch {
+	case state.Data != ZeroData:
+		where = goqu.And(where, goqu.C("error").IsNull())
+		update["data"] = state.Data
+	case state.Error == nil:
+		where = goqu.And(where, goqu.C("error").IsNotNull())
+		update["error"] = nil
+	default:
+		where = goqu.And(where, goqu.C("error").IsNull())
+		update["error"] = state.Error.Error()
+	}
+
+	ok, err := s.update(ctx, s.Database.Update(SQLite3TableName).Set(update).Where(where))
 	if err == nil && !ok {
 		err = ErrNotFound
 	}

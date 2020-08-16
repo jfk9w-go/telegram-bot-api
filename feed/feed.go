@@ -19,6 +19,8 @@ type ID struct {
 
 type Data string
 
+const ZeroData Data = ""
+
 func DataFrom(value interface{}) (Data, error) {
 	buf := flu.NewBuffer()
 	err := flu.EncodeTo(flu.JSON{value}, buf)
@@ -40,6 +42,11 @@ type Feed struct {
 	UpdatedAt *time.Time `db:"updated_at"`
 }
 
+type State struct {
+	Data  Data
+	Error error
+}
+
 var (
 	ErrNotFound  = errors.New("not found")
 	ErrExists    = errors.New("exists")
@@ -55,4 +62,5 @@ type Store interface {
 	List(ctx context.Context, subID SubID, active bool) ([]Feed, error)
 	Clear(ctx context.Context, subID SubID, pattern string) (int64, error)
 	Delete(ctx context.Context, id ID) error
+	Update(ctx context.Context, id ID, state State) error
 }
