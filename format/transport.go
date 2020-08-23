@@ -14,16 +14,56 @@ type Transport interface {
 	Media(ctx context.Context, media *Media, mediaErr error, text string) error
 }
 
+const (
+	parseModeKey   = "parse_mode"
+	notifyKey      = "notify"
+	replyMarkupKey = "reply_markup"
+)
+
+func WithParseMode(ctx context.Context, parseMode telegram.ParseMode) context.Context {
+	return context.WithValue(ctx, parseModeKey, parseMode)
+}
+
+func getParseMode(ctx context.Context) telegram.ParseMode {
+	value := ctx.Value(parseModeKey)
+	if value != nil {
+		return value.(telegram.ParseMode)
+	} else {
+		return telegram.None
+	}
+}
+
+func WithNotify(ctx context.Context) context.Context {
+	return context.WithValue(ctx, notifyKey, true)
+}
+
+func getNotify(ctx context.Context) bool {
+	return ctx.Value(notifyKey) != nil
+}
+
+func WithReplyMarkup(ctx context.Context, markup telegram.ReplyMarkup) context.Context {
+	return context.WithValue(ctx, replyMarkupKey, markup)
+}
+
+func getReplyMarkup(ctx context.Context) telegram.ReplyMarkup {
+	value := ctx.Value(replyMarkupKey)
+	if value != nil {
+		return value.(telegram.ReplyMarkup)
+	} else {
+		return nil
+	}
+}
+
 type TelegramTransport struct {
-	Sender    telegram.Sender
-	ChatIDs   []telegram.ChatID
-	ParseMode telegram.ParseMode
-	Strict    bool
-	Notify    bool
+	Sender  telegram.Sender
+	ChatIDs []telegram.ChatID
+	Strict  bool
 }
 
 func (t *TelegramTransport) send(ctx context.Context, chatIDs []telegram.ChatID, sendable telegram.Sendable) error {
-	options := &telegram.SendOptions{DisableNotification: !t.Notify}
+	options := &telegram.SendOptions{
+		DisableNotification: !getNotify(ctx),
+		ReplyMarkup:         getReplyMarkup(ctx)}
 	for _, chatID := range chatIDs {
 		if _, err := t.Sender.Send(ctx, chatID, sendable, options); err != nil {
 			if t.Strict {
@@ -40,9 +80,8 @@ func (t *TelegramTransport) send(ctx context.Context, chatIDs []telegram.ChatID,
 func (t *TelegramTransport) Text(ctx context.Context, text string, preview bool) error {
 	return t.send(ctx, t.ChatIDs, telegram.Text{
 		Text:                  text,
-		ParseMode:             t.ParseMode,
-		DisableWebPagePreview: !preview,
-	})
+		ParseMode:             getParseMode(ctx),
+		DisableWebPagePreview: !preview})
 }
 
 func (t *TelegramTransport) Media(ctx context.Context, media *Media, mediaErr error, caption string) error {
@@ -50,11 +89,14 @@ func (t *TelegramTransport) Media(ctx context.Context, media *Media, mediaErr er
 		chatID := t.ChatIDs[0]
 		if message, err := t.Sender.Send(ctx, chatID,
 			telegram.Media{
-				ParseMode: t.ParseMode,
+				ParseMode: getParseMode(ctx),
 				Caption:   caption,
 				Input:     media.Input,
 				Type:      telegram.MediaTypeByMIMEType(media.MIMEType)},
-			&telegram.SendOptions{DisableNotification: !t.Notify}); err != nil {
+			&telegram.SendOptions{
+				DisableNotification: !getNotify(ctx),
+				ReplyMarkup:         getReplyMarkup(ctx),
+			}); err != nil {
 			mediaErr = err
 		} else {
 			var file *telegram.MessageFile
@@ -71,7 +113,7 @@ func (t *TelegramTransport) Media(ctx context.Context, media *Media, mediaErr er
 				mediaErr = errors.New("unsupported media type")
 			} else {
 				return t.send(ctx, t.ChatIDs[1:], telegram.Media{
-					ParseMode: t.ParseMode,
+					ParseMode: getParseMode(ctx),
 					Caption:   caption,
 					Input:     flu.URL(file.ID),
 					Type:      telegram.MediaTypeByMIMEType(media.MIMEType)})
@@ -81,4 +123,27 @@ func (t *TelegramTransport) Media(ctx context.Context, media *Media, mediaErr er
 
 	log.Printf("Failed to send initial HTML media message (below) to %s: %s\n%s", t.ChatIDs[0], mediaErr, caption)
 	return t.Text(ctx, caption, true)
+}
+
+type BufferTransport struct {
+	Pages []string
+}
+
+func NewBufferTransport() *BufferTransport {
+	return &BufferTransport{
+		Pages: make([]string, 0),
+	}
+}
+
+func (b *BufferTransport) Text(ctx context.Context, text string, preview bool) error {
+	b.Pages = append(b.Pages, text)
+	return nil
+}
+
+func (b *BufferTransport) Media(ctx context.Context, media *Media, mediaErr error, text string) error {
+	if text != "" {
+		return b.Text(ctx, text, false)
+	}
+
+	return nil
 }

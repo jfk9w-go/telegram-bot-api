@@ -5,6 +5,7 @@ import "context"
 type Client interface {
 	GetMe(ctx context.Context) (*User, error)
 	DeleteMessage(ctx context.Context, chatID ChatID, messageID ID) (bool, error)
+	ExportChatInviteLink(ctx context.Context, chatID ChatID) (string, error)
 	GetChat(ctx context.Context, chatID ChatID) (*Chat, error)
 	GetChatAdministrators(ctx context.Context, chatID ChatID) ([]ChatMember, error)
 	GetChatMember(ctx context.Context, chatID ChatID, userID ID) (*ChatMember, error)

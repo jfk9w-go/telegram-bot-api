@@ -72,7 +72,6 @@ func (f defaultHTMLAnchorFormat) Format(text string, attrs HTMLAttributes) strin
 	if href != "" {
 		return fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(href), text)
 	}
-
 	return ""
 }
 
@@ -93,21 +92,30 @@ type HTMLWriter struct {
 
 var DefaultMaxMessageSize = telegram.MaxMessageSize
 
-func HTML(ctx context.Context, sender telegram.Sender, chatIDs ...telegram.ChatID) *HTMLWriter {
+func HTMLWithTransport(ctx context.Context, transport Transport) *HTMLWriter {
 	return &HTMLWriter{
 		Session: &Session{
-			Context: ctx,
-			Transport: &TelegramTransport{
-				Sender:    sender,
-				ChatIDs:   chatIDs,
-				ParseMode: telegram.HTML,
-				Strict:    true,
-			},
-			PageSize: DefaultMaxMessageSize,
+			Context:   ctx,
+			Transport: transport,
+			PageSize:  DefaultMaxMessageSize,
 		},
 		TagConverter: DefaultHTMLTagConverter,
 		AnchorFormat: DefaultHTMLAnchorFormat,
 	}
+}
+
+func HTML(ctx context.Context, sender telegram.Sender, notify bool, chatIDs ...telegram.ChatID) *HTMLWriter {
+	if notify {
+		ctx = WithNotify(ctx)
+	}
+
+	return HTMLWithTransport(
+		WithParseMode(ctx, telegram.HTML),
+		&TelegramTransport{
+			Sender:  sender,
+			ChatIDs: chatIDs,
+			Strict:  true,
+		})
 }
 
 func (w *HTMLWriter) StartTag(name string, attrs HTMLAttributes) *HTMLWriter {
@@ -217,6 +225,9 @@ func (w *HTMLWriter) Link(text, href string) *HTMLWriter {
 }
 
 func (w *HTMLWriter) Markup(reader io.Reader) *HTMLWriter {
+	if w.err != nil || w.Session.Overflow {
+		return w
+	}
 	tokenizer := html.NewTokenizer(reader)
 	for {
 		if w.err != nil || w.Session.Overflow {
@@ -243,6 +254,9 @@ func (w *HTMLWriter) MarkupString(markup string) *HTMLWriter {
 }
 
 func (w *HTMLWriter) Media(mediaRef MediaRef, collapsible bool) *HTMLWriter {
+	if w.err != nil || w.Session.Overflow {
+		return nil
+	}
 	w.err = w.Session.Media(mediaRef, HTMLAnchor("[media]", mediaRef.URL()), collapsible)
 	return w
 }

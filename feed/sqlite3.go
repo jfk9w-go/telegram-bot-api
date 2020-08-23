@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sync"
 	"time"
+
+	"github.com/jfk9w-go/flu"
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/sqlite3"
@@ -32,7 +33,7 @@ type SQLBuilder interface {
 type SQLite3 struct {
 	*goqu.Database
 	Clock
-	mu sync.RWMutex
+	flu.RWMutex
 }
 
 func NewSQLite3(clock Clock, datasource string) (*SQLite3, error) {
@@ -41,7 +42,6 @@ func NewSQLite3(clock Clock, datasource string) (*SQLite3, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if clock == nil {
 		clock = ClockFunc(time.Now)
 	}
@@ -49,12 +49,12 @@ func NewSQLite3(clock Clock, datasource string) (*SQLite3, error) {
 	return &SQLite3{Database: goqu.New(dialect, db), Clock: clock}, nil
 }
 
-func (s *SQLite3) Init(ctx context.Context) ([]SubID, error) {
+func (s *SQLite3) Init(ctx context.Context) ([]ID, error) {
 	sql := fmt.Sprintf(`
 	CREATE TABLE IF NOT EXISTS %s (
-	  id VARCHAR(63) NOT NULL,
-	  type VARCHAR(31) NOT NULL,
-	  sub_id INTEGER NOT NULL,
+	  sub_id VARCHAR(63) NOT NULL,
+	  vendor VARCHAR(31) NOT NULL,
+	  feed_id INTEGER NOT NULL,
       name VARCHAR(255) NOT NULL,
 	  data TEXT,
 	  updated_at TIMESTAMP,
@@ -65,12 +65,12 @@ func (s *SQLite3) Init(ctx context.Context) ([]SubID, error) {
 	}
 	sql = fmt.Sprintf(`
 	CREATE UNIQUE INDEX IF NOT EXISTS i__%s__id 
-	ON %s(id, type, sub_id)`, SQLite3TableName, SQLite3TableName)
+	ON %s(sub_id, vendor, feed_id)`, SQLite3TableName, SQLite3TableName)
 	if _, err := s.Database.ExecContext(ctx, sql); err != nil {
 		return nil, errors.Wrap(err, "create index")
 	}
-	activeSubs := make([]SubID, 0)
-	err := s.Select(goqu.DISTINCT("sub_id")).From(SQLite3TableName).ScanValsContext(ctx, &activeSubs)
+	activeSubs := make([]ID, 0)
+	err := s.Select(goqu.DISTINCT("feed_id")).From(SQLite3TableName).ScanValsContext(ctx, &activeSubs)
 	if err != nil {
 		return nil, errors.Wrap(err, "select active subs")
 	}
@@ -98,9 +98,9 @@ func (s *SQLite3) UpdateSQLBuilder(ctx context.Context, builder SQLBuilder) (boo
 	return affected > 0, err
 }
 
-func (s *SQLite3) Create(ctx context.Context, feed Feed) error {
-	defer s.WLock().Unlock()
-	ok, err := s.UpdateSQLBuilder(ctx, s.Insert(SQLite3TableName).Rows(feed).OnConflict(goqu.DoNothing()))
+func (s *SQLite3) Create(ctx context.Context, sub Sub) error {
+	defer s.Lock().Unlock()
+	ok, err := s.UpdateSQLBuilder(ctx, s.Insert(SQLite3TableName).Rows(sub).OnConflict(goqu.DoNothing()))
 	if err == nil && !ok {
 		err = ErrExists
 	}
@@ -108,64 +108,64 @@ func (s *SQLite3) Create(ctx context.Context, feed Feed) error {
 	return err
 }
 
-func (s *SQLite3) Get(ctx context.Context, id ID) (Feed, error) {
+func (s *SQLite3) Get(ctx context.Context, id SubID) (Sub, error) {
 	defer s.RLock().Unlock()
-	var feed Feed
-	ok, err := s.Select(Feed{}).
+	var sub Sub
+	ok, err := s.Select(Sub{}).
 		From(SQLite3TableName).
 		Where(s.ByID(id)).
 		Limit(1).
-		ScanStructContext(ctx, &feed)
+		ScanStructContext(ctx, &sub)
 	if err == nil && !ok {
 		err = ErrNotFound
 	}
 
-	return feed, err
+	return sub, err
 }
 
-func (s *SQLite3) Advance(ctx context.Context, subID SubID) (Feed, error) {
+func (s *SQLite3) Advance(ctx context.Context, feedID ID) (Sub, error) {
 	defer s.RLock().Unlock()
-	var feed Feed
-	ok, err := s.Select(Feed{}).
+	var sub Sub
+	ok, err := s.Select(Sub{}).
 		From(SQLite3TableName).
 		Where(goqu.And(
-			goqu.C("sub_id").Eq(subID),
+			goqu.C("feed_id").Eq(feedID),
 			goqu.C("error").IsNull(),
 		)).
 		Order(goqu.I("updated_at").Asc().NullsFirst()).
 		Limit(1).
-		ScanStructContext(ctx, &feed)
+		ScanStructContext(ctx, &sub)
 	if err == nil && !ok {
 		err = ErrNotFound
 	}
 
-	return feed, err
+	return sub, err
 }
 
-func (s *SQLite3) List(ctx context.Context, subID SubID, active bool) ([]Feed, error) {
+func (s *SQLite3) List(ctx context.Context, feedID ID, active bool) ([]Sub, error) {
 	defer s.RLock().Unlock()
-	feeds := make([]Feed, 0)
-	err := s.Select(Feed{}).
+	subs := make([]Sub, 0)
+	err := s.Select(Sub{}).
 		From(SQLite3TableName).
 		Where(goqu.And(
-			goqu.C("sub_id").Eq(subID),
+			goqu.C("feed_id").Eq(feedID),
 			goqu.Literal("error IS NULL").Eq(active),
 		)).
-		ScanStructsContext(ctx, &feeds)
-	return feeds, err
+		ScanStructsContext(ctx, &subs)
+	return subs, err
 }
 
-func (s *SQLite3) Clear(ctx context.Context, subID SubID, pattern string) (int64, error) {
-	defer s.WLock().Unlock()
+func (s *SQLite3) Clear(ctx context.Context, feedID ID, pattern string) (int64, error) {
+	defer s.Lock().Unlock()
 	return s.ExecuteSQLBuilder(ctx, s.Database.Delete(SQLite3TableName).
 		Where(goqu.And(
-			goqu.C("sub_id").Eq(subID),
+			goqu.C("feed_id").Eq(feedID),
 			goqu.C("error").Like(pattern),
 		)))
 }
 
-func (s *SQLite3) Delete(ctx context.Context, id ID) error {
-	defer s.WLock().Unlock()
+func (s *SQLite3) Delete(ctx context.Context, id SubID) error {
+	defer s.Lock().Unlock()
 	ok, err := s.UpdateSQLBuilder(ctx, s.Database.Delete(SQLite3TableName).Where(s.ByID(id)))
 	if err == nil && !ok {
 		err = ErrNotFound
@@ -174,20 +174,22 @@ func (s *SQLite3) Delete(ctx context.Context, id ID) error {
 	return err
 }
 
-func (s *SQLite3) Update(ctx context.Context, id ID, state State) error {
-	defer s.WLock().Unlock()
+func (s *SQLite3) Update(ctx context.Context, id SubID, value interface{}) error {
+	defer s.Lock().Unlock()
 	where := s.ByID(id)
 	update := map[string]interface{}{"updated_at": s.Now()}
-	switch {
-	case state.Data != ZeroData:
-		where = goqu.And(where, goqu.C("error").IsNull())
-		update["data"] = state.Data
-	case state.Error == nil:
+	switch value := value.(type) {
+	case nil:
 		where = goqu.And(where, goqu.C("error").IsNotNull())
 		update["error"] = nil
-	default:
+	case Data:
 		where = goqu.And(where, goqu.C("error").IsNull())
-		update["error"] = state.Error.Error()
+		update["data"] = value
+	case error:
+		where = goqu.And(where, goqu.C("error").IsNull())
+		update["error"] = value.Error()
+	default:
+		return errors.Errorf("invalid update value type: %T", value)
 	}
 
 	ok, err := s.UpdateSQLBuilder(ctx, s.Database.Update(SQLite3TableName).Set(update).Where(where))
@@ -202,26 +204,10 @@ func (s *SQLite3) Close() error {
 	return s.Db.(*sql.DB).Close()
 }
 
-func (s *SQLite3) ByID(id ID) goqu.Expression {
+func (s *SQLite3) ByID(id SubID) goqu.Expression {
 	return goqu.Ex{
-		"id":     id.ID,
-		"type":   id.Type,
-		"sub_id": id.SubID,
+		"sub_id":  id.ID,
+		"vendor":  id.Vendor,
+		"feed_id": id.FeedID,
 	}
-}
-
-func (s *SQLite3) RLock() UnlockFunc {
-	s.mu.RLock()
-	return s.mu.RUnlock
-}
-
-func (s *SQLite3) WLock() UnlockFunc {
-	s.mu.Lock()
-	return s.mu.Unlock
-}
-
-type UnlockFunc func()
-
-func (fun UnlockFunc) Unlock() {
-	fun()
 }

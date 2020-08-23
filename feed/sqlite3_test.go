@@ -34,50 +34,58 @@ func TestSQLite3_Basic(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Empty(t, activeSubs)
 
-	sample := feed.Feed{
-		ID:   feed.ID{"1", "test", 1},
-		Name: "test feed",
-		Data: feed.Data(`{"value": 5}`),
+	sub := feed.Sub{
+		SubID: feed.SubID{"1", "test", 1},
+		Name:  "test feed",
+		Data:  feed.Data(`{"value": 5}`),
 	}
 
-	_, err = store.Get(ctx, sample.ID)
+	_, err = store.Get(ctx, sub.SubID)
 	assert.Equal(t, feed.ErrNotFound, err)
-	err = store.Create(ctx, sample)
+	err = store.Create(ctx, sub)
 	assert.Nil(t, err)
-	err = store.Create(ctx, sample)
+	err = store.Create(ctx, sub)
 	assert.Equal(t, feed.ErrExists, err)
-	stored, err := store.Get(ctx, sample.ID)
+	stored, err := store.Get(ctx, sub.SubID)
 	assert.Nil(t, err)
-	assert.Equal(t, sample, stored)
-	stored, err = store.Advance(ctx, sample.SubID)
+	assert.Equal(t, sub, stored)
+	stored, err = store.Advance(ctx, sub.FeedID)
 	assert.Nil(t, err)
-	assert.Equal(t, sample, stored)
-	list, err := store.List(ctx, sample.SubID, true)
+	assert.Equal(t, sub, stored)
+	list, err := store.List(ctx, sub.FeedID, true)
 	assert.Nil(t, err)
-	assert.Equal(t, []feed.Feed{sample}, list)
+	assert.Equal(t, []feed.Sub{sub}, list)
 	clock.now = time.Date(2020, 8, 13, 13, 54, 64, 0, time.UTC)
-	sample.UpdatedAt = &clock.now
-	err = store.Update(ctx, sample.ID, feed.State{Error: errors.New("test error")})
+	sub.UpdatedAt = &clock.now
+	data, err := feed.DataFrom(struct{ field string }{"value"})
 	assert.Nil(t, err)
-	list, err = store.List(ctx, sample.SubID, true)
+	sub.Data = data
+	err = store.Update(ctx, sub.SubID, data)
+	assert.Nil(t, err)
+	stored, err = store.Get(ctx, sub.SubID)
+	assert.Nil(t, err)
+	assert.Equal(t, sub, stored)
+	err = store.Update(ctx, sub.SubID, errors.New("test error"))
+	assert.Nil(t, err)
+	list, err = store.List(ctx, sub.FeedID, true)
 	assert.Nil(t, err)
 	assert.Empty(t, list)
-	list, err = store.List(ctx, sample.SubID, false)
+	list, err = store.List(ctx, sub.FeedID, false)
 	assert.Nil(t, err)
-	assert.Equal(t, []feed.Feed{sample}, list)
-	stored, err = store.Advance(ctx, sample.SubID)
+	assert.Equal(t, []feed.Sub{sub}, list)
+	stored, err = store.Advance(ctx, sub.FeedID)
 	assert.Equal(t, feed.ErrNotFound, err)
-	stored, err = store.Get(ctx, sample.ID)
+	stored, err = store.Get(ctx, sub.SubID)
 	assert.Nil(t, err)
-	assert.Equal(t, sample, stored)
-	cleared, err := store.Clear(ctx, sample.SubID, "%nontest%")
+	assert.Equal(t, sub, stored)
+	cleared, err := store.Clear(ctx, sub.FeedID, "%nontest%")
 	assert.Nil(t, err)
 	assert.Equal(t, int64(0), cleared)
-	cleared, err = store.Clear(ctx, sample.SubID, "%test%")
+	cleared, err = store.Clear(ctx, sub.FeedID, "%test%")
 	assert.Nil(t, err)
 	assert.Equal(t, int64(1), cleared)
-	stored, err = store.Get(ctx, sample.ID)
+	stored, err = store.Get(ctx, sub.SubID)
 	assert.Equal(t, feed.ErrNotFound, err)
-	stored, err = store.Advance(ctx, sample.SubID)
+	stored, err = store.Advance(ctx, sub.FeedID)
 	assert.Equal(t, feed.ErrNotFound, err)
 }

@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/jfk9w-go/telegram-bot-api/feed"
 
 	"github.com/jfk9w-go/telegram-bot-api/format"
 
@@ -34,6 +34,7 @@ Sagittis aliquam malesuada bibendum arcu vitae elementum curabitur. Vitae auctor
 
 type CommandListener struct {
 	flu.RateLimiter
+	*feed.CommandListener
 }
 
 func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd telegram.Command) (err error) {
@@ -41,6 +42,14 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 		return err
 	}
 	defer l.Complete()
+
+	if err := l.CommandListener.OnCommand(ctx, bot, cmd); err != nil {
+		if err.Error() != "invalid command" {
+			return err
+		}
+	} else {
+		return nil
+	}
 
 	switch cmd.Key {
 	case "/greet":
@@ -50,7 +59,7 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 				Text:      fmt.Sprintf(`Hello, <i><pre><b><a href="%s"><i>Google</i></a></b></pre></i>`, "https://www.google.com")},
 			&telegram.SendOptions{ReplyToMessageID: cmd.Message.ID})
 	case "/tick":
-		err = format.HTML(ctx, bot, cmd.Chat.ID).
+		err = format.HTML(ctx, bot, true, cmd.Chat.ID).
 			Text("Here's a ").
 			Bold("tick").
 			Italic(" for ya!").
@@ -70,7 +79,7 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 				Input:    flu.File("tick.jpg"),
 			}, nil)
 
-		err = format.HTML(ctx, bot, cmd.Chat.ID).
+		err = format.HTML(ctx, bot, false, cmd.Chat.ID).
 			Text(LoremIpsum).
 			Media(media, false).
 			Media(media, false).
@@ -156,6 +165,32 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 	return nil
 }
 
+type Vendor struct{}
+
+func (v Vendor) Parse(_ context.Context, ref, _ string) (feed.Candidate, error) {
+	return feed.Candidate{
+		ID:   ref,
+		Name: ref,
+		Data: nil,
+	}, nil
+}
+
+func (v Vendor) Load(_ context.Context, data feed.Data, queue chan<- feed.Update) {
+	var value int
+	if err := data.ReadTo(&value); err != nil {
+		queue <- feed.Update{Error: err}
+	} else {
+		queue <- feed.Update{
+			Write: func(html *format.HTMLWriter) *format.HTMLWriter {
+				return html.Bold("KEK").Text(fmt.Sprintf("\n%d", value))
+			},
+			Data: value + 1,
+		}
+	}
+
+	close(queue)
+}
+
 // This is an example bot which has three commands:
 //   /greet - reply with "Hello, %username%"
 //   /count n - count from 1 till n
@@ -166,14 +201,27 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 //   cd example/ && go run main.go <token>
 // where <token> is your Telegram Bot API token.
 func main() {
-	defer log.Printf("main exit")
-	go func() { log.Println(http.ListenAndServe("localhost:6060", nil)) }()
-
-	// Create a bot instance.
-	defer telegram.NewBot(fluhttp.NewTransport().
+	store, err := feed.NewSQLite3(nil, ":memory:")
+	if err != nil {
+		panic(err)
+	}
+	defer store.Close()
+	_, err = store.Init(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	executor := feed.NewTaskExecutor()
+	defer executor.Close()
+	bot := telegram.NewBot(fluhttp.NewTransport().
 		ResponseHeaderTimeout(2*time.Minute).
-		NewClient(), os.Args[1]).
-		CommandListener(CommandListener{RateLimiter: flu.ConcurrencyRateLimiter(5)}).
-		Close()
+		NewClient(), os.Args[1])
+	defer bot.CommandListener(CommandListener{
+		RateLimiter: flu.ConcurrencyRateLimiter(2),
+		CommandListener: &feed.CommandListener{
+			Aggregator: feed.NewAggregator(executor, store, feed.TelegramHTML{bot}, 5*time.Second).
+				Vendor("test_vendor", Vendor{}),
+			Management: feed.NewSupervisorManagement(bot, 50613409),
+		},
+	}).Close()
 	flu.AwaitSignal(syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
 }

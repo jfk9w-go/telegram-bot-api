@@ -46,6 +46,7 @@ type (
 		FirstName                   string    `json:"first_name"`
 		LastName                    string    `json:"last_name"`
 		AllMembersAreAdministrators bool      `json:"all_members_are_administrators"`
+		InviteLink                  string    `json:"invite_link"`
 	}
 
 	MessageFile struct {

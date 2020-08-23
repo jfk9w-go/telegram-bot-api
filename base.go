@@ -78,6 +78,13 @@ func (c BaseClient) DeleteMessage(ctx context.Context, chatID ChatID, messageID 
 	return ok, c.Execute(ctx, "deleteMessage", body, &ok)
 }
 
+func (c BaseClient) ExportChatInviteLink(ctx context.Context, chatID ChatID) (string, error) {
+	body := new(fluhttp.Form).
+		Set("chat_id", chatID.queryParam())
+	var inviteLink string
+	return inviteLink, c.Execute(ctx, "exportChatInviteLink", body, &inviteLink)
+}
+
 // Use this method to get up to date information about the chat (current name of
 // the user for one-on-one conversations, current username of a user, group or updateChannel, etc.).
 // Returns a Chat object on success.

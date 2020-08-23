@@ -294,7 +294,7 @@ func (cmd Command) Reply(ctx context.Context, client Client, text string) error 
 }
 
 func (cmd Command) String() string {
-	str := fmt.Sprintf("[%s@%s] %s", cmd.User.ID, cmd.Chat.ID, cmd.Key)
+	str := fmt.Sprintf("[cmd-%s+%s] %s", cmd.User.ID, cmd.Chat.ID, cmd.Key)
 	if cmd.Payload != "" {
 		str += " " + cmd.Payload
 	}
