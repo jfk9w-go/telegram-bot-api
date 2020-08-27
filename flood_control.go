@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jfk9w-go/flu"
@@ -21,7 +20,7 @@ type FloodControlAware struct {
 	executor    Executor
 	rateLimiter flu.RateLimiter
 	recipients  map[ChatID]flu.RateLimiter
-	mutex       sync.RWMutex
+	flu.RWMutex
 }
 
 func FloodControl(executor Executor) *FloodControlAware {
@@ -41,9 +40,9 @@ func (c *FloodControlAware) send(ctx context.Context, chatID ChatID, item sendab
 	}
 
 	method := "send" + strings.Title(item.kind())
-	c.mutex.RLock()
+	c.RLock()
 	limiter, exists := c.recipients[chatID]
-	c.mutex.RUnlock()
+	c.RUnlock()
 	if exists {
 		if err := limiter.Start(ctx); err != nil {
 			return err
@@ -84,7 +83,7 @@ func (c *FloodControlAware) send(ctx context.Context, chatID ChatID, item sendab
 }
 
 func (c *FloodControlAware) newRecipient(chat *Chat) {
-	c.mutex.Lock()
+	defer c.Lock().Unlock()
 	if _, ok := c.recipients[chat.ID]; !ok {
 		rateLimiter := flu.IntervalRateLimiter(SendDelays[chat.Type])
 		c.recipients[chat.ID] = rateLimiter
@@ -92,7 +91,6 @@ func (c *FloodControlAware) newRecipient(chat *Chat) {
 			c.recipients[*chat.Username] = rateLimiter
 		}
 	}
-	c.mutex.Unlock()
 }
 
 // Send is an umbrella method for various /send* API calls which return only one Message.

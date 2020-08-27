@@ -9,13 +9,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jfk9w-go/telegram-bot-api/feed"
-
-	"github.com/jfk9w-go/telegram-bot-api/format"
-
 	"github.com/jfk9w-go/flu"
 	fluhttp "github.com/jfk9w-go/flu/http"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
+	"github.com/jfk9w-go/telegram-bot-api/feed"
+	"github.com/jfk9w-go/telegram-bot-api/format"
 	"github.com/pkg/errors"
 )
 
