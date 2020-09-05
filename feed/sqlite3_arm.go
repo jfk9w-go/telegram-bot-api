@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func selectSubs(ctx context.Context, builder *goqu.SelectDataset) ([]Sub, error) {
+func (s *SQLite3) selectSubs(ctx context.Context, builder *goqu.SelectDataset) ([]Sub, error) {
 	rows, err := s.QuerySQLBuilder(ctx, builder.
 		Select(
 			goqu.C("sub_id"),

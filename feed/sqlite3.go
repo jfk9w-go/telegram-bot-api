@@ -133,7 +133,7 @@ func (s *SQLite3) Create(ctx context.Context, sub Sub) error {
 
 func (s *SQLite3) Get(ctx context.Context, id SubID) (Sub, error) {
 	defer s.RLock().Unlock()
-	subs, err := selectSubs(ctx, s.
+	subs, err := s.selectSubs(ctx, goqu.
 		From(SQLite3FeedTableName).
 		Where(s.ByID(id)).
 		Limit(1))
@@ -150,7 +150,7 @@ func (s *SQLite3) Get(ctx context.Context, id SubID) (Sub, error) {
 
 func (s *SQLite3) Advance(ctx context.Context, feedID ID) (Sub, error) {
 	defer s.RLock().Unlock()
-	subs, err := selectSubs(ctx, s.
+	subs, err := s.selectSubs(ctx, goqu.
 		From(SQLite3FeedTableName).
 		Where(goqu.And(
 			goqu.C("feed_id").Eq(feedID),
@@ -171,7 +171,7 @@ func (s *SQLite3) Advance(ctx context.Context, feedID ID) (Sub, error) {
 
 func (s *SQLite3) List(ctx context.Context, feedID ID, active bool) ([]Sub, error) {
 	defer s.RLock().Unlock()
-	return selectSubs(ctx, s.
+	return s.selectSubs(ctx, goqu.
 		From(SQLite3FeedTableName).
 		Where(goqu.And(
 			goqu.C("feed_id").Eq(feedID),
