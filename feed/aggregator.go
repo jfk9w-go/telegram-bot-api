@@ -88,7 +88,7 @@ func (t *aggregatorTask) update(ctx context.Context, sub Sub) error {
 	defer cancel()
 	go vendor.Load(vctx, sub.Data, queue)
 	count := 0
-	defer log.Printf("[sub > %s] processed %d updates", sub.SubID, count)
+	defer func() { log.Printf("[sub > %s] processed %d updates", sub.SubID, count) }()
 	var html *format.HTMLWriter = nil
 	for update := range queue.channel {
 		if update.Error != nil {

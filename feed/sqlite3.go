@@ -72,6 +72,7 @@ func (s *SQLite3) Init(ctx context.Context) ([]ID, error) {
 	  url TEXT NOT NULL,
 	  hash TEXT NOT NULL,
 	  first_seen TIMESTAMP NOT NULL,
+	  last_seen TIMESTAMP,
 	  collisions INTEGER NOT NULL DEFAULT 0,
 	  UNIQUE(feed_id, url),
 	  UNIQUE(feed_id, hash)
@@ -226,16 +227,18 @@ func (s *SQLite3) Check(ctx context.Context, feedID ID, url string, hash string)
 	defer s.Lock().Unlock()
 	now := s.Now()
 	_, err := s.ExecuteSQLBuilder(ctx, s.Insert(SQLite3BlobTableName).
-		Cols("feed_id", "url", "hash", "first_seen").
-		Vals([]interface{}{feedID, url, hash, now}).
-		OnConflict(goqu.DoUpdate("url", map[string]interface{}{
-			"collisions": goqu.Literal("collisions + 1"),
-			"last_seen":  now,
-		})).
-		OnConflict(goqu.DoUpdate("hash", map[string]interface{}{
-			"collisions": goqu.Literal("collisions + 1"),
-			"last_seen":  now,
-		})))
+		Cols("feed_id", "url", "hash", "first_seen", "last_seen").
+		Vals([]interface{}{feedID, url, hash, now, now}).
+		OnConflict(goqu.DoUpdate("feed_id, url",
+			map[string]interface{}{
+				"collisions": goqu.Literal("collisions + 1"),
+				"last_seen":  now,
+			})).
+		OnConflict(goqu.DoUpdate("feed_id, hash",
+			map[string]interface{}{
+				"collisions": goqu.Literal("collisions + 1"),
+				"last_seen":  now,
+			})))
 	if err != nil {
 		return errors.Wrap(err, "update")
 	}
