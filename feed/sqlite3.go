@@ -133,49 +133,50 @@ func (s *SQLite3) Create(ctx context.Context, sub Sub) error {
 
 func (s *SQLite3) Get(ctx context.Context, id SubID) (Sub, error) {
 	defer s.RLock().Unlock()
-	var sub Sub
-	ok, err := s.Select(Sub{}).
+	subs, err := selectSubs(ctx, s.
 		From(SQLite3FeedTableName).
 		Where(s.ByID(id)).
-		Limit(1).
-		ScanStructContext(ctx, &sub)
-	if err == nil && !ok {
-		err = ErrNotFound
+		Limit(1))
+	if err != nil {
+		return Sub{}, errors.Wrap(err, "select")
 	}
 
-	return sub, err
+	if len(subs) == 0 {
+		return Sub{}, ErrNotFound
+	}
+
+	return subs[0], nil
 }
 
 func (s *SQLite3) Advance(ctx context.Context, feedID ID) (Sub, error) {
 	defer s.RLock().Unlock()
-	var sub Sub
-	ok, err := s.Select(Sub{}).
+	subs, err := selectSubs(ctx, s.
 		From(SQLite3FeedTableName).
 		Where(goqu.And(
 			goqu.C("feed_id").Eq(feedID),
 			goqu.C("error").IsNull(),
 		)).
 		Order(goqu.I("updated_at").Asc().NullsFirst()).
-		Limit(1).
-		ScanStructContext(ctx, &sub)
-	if err == nil && !ok {
-		err = ErrNotFound
+		Limit(1))
+	if err != nil {
+		return Sub{}, errors.Wrap(err, "select")
 	}
 
-	return sub, err
+	if len(subs) == 0 {
+		return Sub{}, ErrNotFound
+	}
+
+	return subs[0], nil
 }
 
 func (s *SQLite3) List(ctx context.Context, feedID ID, active bool) ([]Sub, error) {
 	defer s.RLock().Unlock()
-	subs := make([]Sub, 0)
-	err := s.Select(Sub{}).
+	return selectSubs(ctx, s.
 		From(SQLite3FeedTableName).
 		Where(goqu.And(
 			goqu.C("feed_id").Eq(feedID),
 			goqu.Literal("error IS NULL").Eq(active),
-		)).
-		ScanStructsContext(ctx, &subs)
-	return subs, err
+		)))
 }
 
 func (s *SQLite3) Clear(ctx context.Context, feedID ID, pattern string) (int64, error) {
