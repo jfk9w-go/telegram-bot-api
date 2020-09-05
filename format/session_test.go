@@ -28,7 +28,7 @@ func (t *testTransport) Text(ctx context.Context, text string, preview bool) err
 	return nil
 }
 
-func (t *testTransport) Media(ctx context.Context, media *format.Media, mediaErr error, text string) error {
+func (t *testTransport) Media(ctx context.Context, media format.Media, mediaErr error, text string) error {
 	panic("implement me")
 }
 

@@ -69,8 +69,11 @@ func (s *SQLite3) Init(ctx context.Context) ([]ID, error) {
 	sql = fmt.Sprintf(`
 	CREATE TABLE IF NOT EXISTS %s (
       feed_id INTEGER NOT NULL,
+	  url TEXT NOT NULL,
 	  hash TEXT NOT NULL,
 	  first_seen TIMESTAMP NOT NULL,
+	  collisions INTEGER NOT NULL DEFAULT 0,
+	  UNIQUE(feed_id, url),
 	  UNIQUE(feed_id, hash)
 	)`, SQLite3BlobTableName.GetTable())
 	if _, err := s.Database.ExecContext(ctx, sql); err != nil {
@@ -219,18 +222,35 @@ func (s *SQLite3) Update(ctx context.Context, id SubID, value interface{}) error
 	return err
 }
 
-func (s *SQLite3) Check(ctx context.Context, feedID ID, hash string) error {
-	now := s.Now()
+func (s *SQLite3) Check(ctx context.Context, feedID ID, url string, hash string) error {
 	defer s.Lock().Unlock()
-	ok, err := s.UpdateSQLBuilder(ctx, s.Insert(SQLite3BlobTableName).
-		Cols("feed_id", "hash", "first_seen").
-		Vals([]interface{}{feedID, hash, now}).
-		OnConflict(goqu.DoNothing()))
+	now := s.Now()
+	_, err := s.ExecuteSQLBuilder(ctx, s.Insert(SQLite3BlobTableName).
+		Cols("feed_id", "url", "hash", "first_seen").
+		Vals([]interface{}{feedID, url, hash, now}).
+		OnConflict(goqu.DoUpdate("url", map[string]interface{}{
+			"collisions": goqu.Literal("collisions + 1"),
+			"last_seen":  now,
+		})).
+		OnConflict(goqu.DoUpdate("hash", map[string]interface{}{
+			"collisions": goqu.Literal("collisions + 1"),
+			"last_seen":  now,
+		})))
 	if err != nil {
 		return errors.Wrap(err, "update")
 	}
 
-	if !ok {
+	collisions := 0
+	if _, err := s.Select(goqu.MAX(goqu.C("collisions"))).
+		From(SQLite3BlobTableName).
+		Where(goqu.And(
+			goqu.C("feed_id").Eq(feedID),
+			goqu.Or(goqu.C("url").Eq(url), goqu.C("hash").Eq(hash)))).
+		ScanValContext(ctx, &collisions); err != nil {
+		return errors.Wrap(err, "select")
+	}
+
+	if collisions > 0 {
 		return format.ErrIgnoredMedia
 	}
 

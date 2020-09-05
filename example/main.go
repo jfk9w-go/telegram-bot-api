@@ -200,24 +200,31 @@ func (v Vendor) Load(ctx context.Context, data feed.Data, queue feed.Queue) {
 //   cd example/ && go run main.go <token>
 // where <token> is your Telegram Bot API token.
 func main() {
-	feeds, err := feed.NewSQLite3(nil, ":memory:")
+	store, err := feed.NewSQLite3(nil, ":memory:")
 	if err != nil {
 		panic(err)
 	}
 
+	executor := feed.NewTaskExecutor()
+	defer executor.Close()
+
 	bot := telegram.NewBot(fluhttp.NewTransport().
 		ResponseHeaderTimeout(2*time.Minute).
 		NewClient(), os.Args[1])
-	listener := &feed.CommandListener{
-		Aggregator: feed.NewAggregator(feed.NewTaskExecutor(), feeds, feed.TelegramHTML{bot}, 5*time.Second).
-			Vendor("test_vendor", Vendor{}),
+	listener, err := (&feed.CommandListener{
+		Aggregator: (&feed.Aggregator{
+			Executor:          executor,
+			Feeds:             store,
+			HTMLWriterFactory: feed.TelegramHTML{Sender: bot},
+			UpdateInterval:    5 * time.Second,
+		}).Vendor("test_vendor", Vendor{}),
 		Management: feed.NewSupervisorManagement(bot, 50613409),
-	}
-	if err := listener.Init(context.Background()); err != nil {
+	}).Init(context.Background())
+	if err != nil {
 		panic(err)
 	}
-
 	defer listener.Close()
+
 	defer bot.CommandListener(CommandListener{
 		RateLimiter:     flu.ConcurrencyRateLimiter(2),
 		CommandListener: listener,

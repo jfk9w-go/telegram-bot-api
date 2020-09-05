@@ -287,5 +287,5 @@ func (d MD5MediaDedup) Check(ctx context.Context, feedID ID, url string, blob fo
 	if err := flu.Copy(blob, flu.IO{W: hash}); err != nil {
 		return errors.Wrap(err, "hash")
 	}
-	return d.Hashes.Check(ctx, feedID, fmt.Sprintf("%x", hash.Sum(nil)))
+	return d.Hashes.Check(ctx, feedID, url, fmt.Sprintf("%x", hash.Sum(nil)))
 }

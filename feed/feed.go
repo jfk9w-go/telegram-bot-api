@@ -125,7 +125,7 @@ type Feeds interface {
 }
 
 type Hashes interface {
-	Check(ctx context.Context, feedID ID, hash string) error
+	Check(ctx context.Context, feedID ID, url string, hash string) error
 }
 
 type Queue struct {
