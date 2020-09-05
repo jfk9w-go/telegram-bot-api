@@ -71,7 +71,7 @@ func (s *Session) Flush() error {
 
 func (s *Session) Capacity() int {
 	if s.PageSize < 1 {
-		return math.MaxInt64
+		return math.MaxInt32
 	}
 	return s.PageSize - s.currSize - utf8.RuneCountInString(s.Suffix)
 }
