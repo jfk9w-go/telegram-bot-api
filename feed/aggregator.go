@@ -5,6 +5,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/jfk9w-go/flu/metrics"
+
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 
 	"github.com/jfk9w-go/telegram-bot-api/format"
@@ -39,6 +41,7 @@ type aggregatorTask struct {
 	vendors           map[string]Vendor
 	feedID            ID
 	suspendListener   SuspendListener
+	metrics           metrics.Registry
 }
 
 func (t *aggregatorTask) Execute(ctx context.Context) error {
@@ -52,14 +55,17 @@ func (t *aggregatorTask) Execute(ctx context.Context) error {
 			updateErr := err
 			if ctx.Err() != nil {
 				return err
-			} else if err := t.updateStore(sub.SubID, err); err != nil {
-				if ctx.Err() != nil {
-					return err
-				} else {
-					log.Printf("[sub > %s] update failed: %s", sub.SubID, err)
+			} else {
+				t.metrics.Counter("update_err", sub.MetricsLabels()).Inc()
+				if err := t.updateStore(sub.SubID, err); err != nil {
+					if ctx.Err() != nil {
+						return err
+					} else {
+						log.Printf("[sub > %s] update failed: %s", sub.SubID, err)
+					}
+				} else if t.suspendListener != nil {
+					go t.suspendListener.OnSuspend(sub, updateErr)
 				}
-			} else if t.suspendListener != nil {
-				go t.suspendListener.OnSuspend(sub, updateErr)
 			}
 		}
 
@@ -110,6 +116,7 @@ func (t *aggregatorTask) update(ctx context.Context, sub Sub) error {
 		if err != nil {
 			return errors.Wrap(err, "store update")
 		}
+		t.metrics.Counter("update_ok", sub.MetricsLabels()).Inc()
 		count++
 	}
 
@@ -132,32 +139,31 @@ func (t *aggregatorTask) updateStore(subID SubID, value interface{}) error {
 }
 
 type Aggregator struct {
-	executor          TaskExecutor
-	store             Feeds
-	htmlWriterFactory HTMLWriterFactory
-	vendors           map[string]Vendor
-	interval          time.Duration
-	suspendListener   SuspendListener
-}
-
-func NewAggregator(executor TaskExecutor, store Feeds, htmlWriterFactory HTMLWriterFactory, interval time.Duration) *Aggregator {
-	return &Aggregator{
-		executor:          executor,
-		store:             store,
-		htmlWriterFactory: htmlWriterFactory,
-		vendors:           make(map[string]Vendor),
-		interval:          interval,
-	}
+	Executor          TaskExecutor
+	Feeds             Feeds
+	HTMLWriterFactory HTMLWriterFactory
+	Vendors           map[string]Vendor
+	UpdateInterval    time.Duration
+	SuspendListener   SuspendListener
+	Metrics           metrics.Registry
 }
 
 func (a *Aggregator) Vendor(id string, vendor Vendor) *Aggregator {
-	a.vendors[id] = vendor
+	if a.Metrics == nil {
+		a.Metrics = metrics.DummyRegistry{}
+	}
+
+	if a.Vendors == nil {
+		a.Vendors = map[string]Vendor{}
+	}
+
+	a.Vendors[id] = vendor
 	return a
 }
 
 func (a *Aggregator) Init(ctx context.Context, suspendListener SuspendListener) error {
-	a.suspendListener = suspendListener
-	ids, err := a.store.Init(ctx)
+	a.SuspendListener = suspendListener
+	ids, err := a.Feeds.Init(ctx)
 	if err != nil {
 		return err
 	}
@@ -170,23 +176,24 @@ func (a *Aggregator) Init(ctx context.Context, suspendListener SuspendListener) 
 }
 
 func (a *Aggregator) submitTask(feedID ID) {
-	a.executor.Submit(feedID, &aggregatorTask{
-		htmlWriterFactory: a.htmlWriterFactory,
-		store:             a.store,
-		interval:          a.interval,
-		vendors:           a.vendors,
+	a.Executor.Submit(feedID, &aggregatorTask{
+		htmlWriterFactory: a.HTMLWriterFactory,
+		store:             a.Feeds,
+		interval:          a.UpdateInterval,
+		vendors:           a.Vendors,
 		feedID:            feedID,
-		suspendListener:   a.suspendListener,
+		suspendListener:   a.SuspendListener,
+		metrics:           a.Metrics,
 	})
 }
 
 func (a *Aggregator) Close() error {
-	a.executor.Close()
-	return a.store.Close()
+	a.Executor.Close()
+	return a.Feeds.Close()
 }
 
 func (a *Aggregator) Subscribe(ctx context.Context, feedID ID, ref string, options []string) (Sub, error) {
-	for vendorID, vendor := range a.vendors {
+	for vendorID, vendor := range a.Vendors {
 		sub, err := vendor.Parse(ctx, ref, options)
 		switch err {
 		case nil:
@@ -205,7 +212,7 @@ func (a *Aggregator) Subscribe(ctx context.Context, feedID ID, ref string, optio
 				return sub, errors.Wrap(err, "wrap data")
 			}
 
-			if err := a.store.Create(ctx, sub); err != nil {
+			if err := a.Feeds.Create(ctx, sub); err != nil {
 				return sub, err
 			}
 
@@ -224,17 +231,17 @@ func (a *Aggregator) Subscribe(ctx context.Context, feedID ID, ref string, optio
 }
 
 func (a *Aggregator) Suspend(ctx context.Context, subID SubID, err error) (Sub, error) {
-	if err := a.store.Update(ctx, subID, err); err != nil {
+	if err := a.Feeds.Update(ctx, subID, err); err != nil {
 		return Sub{}, err
 	}
-	return a.store.Get(ctx, subID)
+	return a.Feeds.Get(ctx, subID)
 }
 
 func (a *Aggregator) Resume(ctx context.Context, subID SubID) (Sub, error) {
-	if err := a.store.Update(ctx, subID, nil); err != nil {
+	if err := a.Feeds.Update(ctx, subID, nil); err != nil {
 		return Sub{}, err
 	}
-	sub, err := a.store.Get(ctx, subID)
+	sub, err := a.Feeds.Get(ctx, subID)
 	if err != nil {
 		return Sub{}, err
 	}
@@ -244,20 +251,20 @@ func (a *Aggregator) Resume(ctx context.Context, subID SubID) (Sub, error) {
 }
 
 func (a *Aggregator) Delete(ctx context.Context, subID SubID) (Sub, error) {
-	sub, err := a.store.Get(ctx, subID)
+	sub, err := a.Feeds.Get(ctx, subID)
 	if err != nil {
 		return Sub{}, errors.Wrap(err, "get")
 	}
-	if err := a.store.Delete(ctx, subID); err != nil {
+	if err := a.Feeds.Delete(ctx, subID); err != nil {
 		return Sub{}, errors.Wrap(err, "store delete")
 	}
 	return sub, nil
 }
 
 func (a *Aggregator) Clear(ctx context.Context, feedID ID, pattern string) (int64, error) {
-	return a.store.Clear(ctx, feedID, pattern)
+	return a.Feeds.Clear(ctx, feedID, pattern)
 }
 
 func (a *Aggregator) List(ctx context.Context, feedID ID, active bool) ([]Sub, error) {
-	return a.store.List(ctx, feedID, active)
+	return a.Feeds.List(ctx, feedID, active)
 }

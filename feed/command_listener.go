@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jfk9w-go/flu/metrics"
+
 	"github.com/jfk9w-go/flu"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 	"github.com/jfk9w-go/telegram-bot-api/format"
@@ -125,10 +127,15 @@ type CommandListener struct {
 	Aggregator *Aggregator
 	Management Management
 	Aliases    map[string]telegram.ID
+	Metrics    metrics.Registry
 }
 
-func (c *CommandListener) Init(ctx context.Context) error {
-	return c.Aggregator.Init(ctx, c)
+func (c *CommandListener) Init(ctx context.Context) (*CommandListener, error) {
+	if c.Metrics == nil {
+		c.Metrics = metrics.DummyRegistry{}
+	}
+
+	return c, c.Aggregator.Init(ctx, c)
 }
 
 func (c *CommandListener) Close() error {
@@ -143,6 +150,10 @@ const (
 
 func (c *CommandListener) OnCommand(ctx context.Context, client telegram.Client, cmd telegram.Command) error {
 	var fun func(context.Context, telegram.Client, telegram.Command) error
+	c.Metrics.Counter(cmd.Key, metrics.Labels{
+		"chat_id", cmd.Chat.ID.String(),
+		"user_id", cmd.User.ID.String(),
+	}).Inc()
 	switch cmd.Key {
 	case "/sub", "/subscribe":
 		fun = c.Subscribe
@@ -206,9 +217,9 @@ func (c *CommandListener) resolveChatID(ctx context.Context, client telegram.Cli
 		if id, ok := c.Aliases[cmd.Args[argumentIndex]]; ok {
 			chatID = id
 		} else {
-			chat, err := client.GetChat(ctx, telegram.Username(cmd.Args[1]))
+			chat, err := client.GetChat(ctx, telegram.Username(cmd.Args[argumentIndex]))
 			if err != nil {
-				chatID, err = telegram.ParseID(cmd.Args[1])
+				chatID, err = telegram.ParseID(cmd.Args[argumentIndex])
 				if err != nil {
 					return nil, 0, errors.Wrap(err, "parse chat ID")
 				}
@@ -393,6 +404,14 @@ func (c *CommandListener) List(ctx context.Context, client telegram.Client, cmd 
 	if err != nil {
 		return err
 	}
+	if active && len(subs) == 0 {
+		active = false
+		subs, err = c.Aggregator.List(ctx, ID(chatID), active)
+		if err != nil {
+			return err
+		}
+	}
+
 	status, changeCmd := "🔥", suspendCommandKey
 	if !active {
 		status, changeCmd = "🛑", resumeCommandKey

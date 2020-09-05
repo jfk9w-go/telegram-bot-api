@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jfk9w-go/telegram-bot-api/format"
+
 	"github.com/jfk9w-go/telegram-bot-api/feed"
 	"github.com/stretchr/testify/assert"
 )
@@ -18,7 +20,7 @@ func (c *testClock) Now() time.Time {
 	return c.now
 }
 
-func newTestSQLite3(t *testing.T, clock feed.Clock) *feed.SQLite3 {
+func newTestSQLite3(t *testing.T, clock format.Clock) *feed.SQLite3 {
 	store, err := feed.NewSQLite3(clock, ":memory:")
 	assert.Nil(t, err)
 	return store

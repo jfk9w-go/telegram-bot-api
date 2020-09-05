@@ -4,16 +4,18 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jfk9w-go/flu/metrics"
+	telegram "github.com/jfk9w-go/telegram-bot-api"
 
 	"github.com/jfk9w-go/flu"
 	"github.com/jfk9w-go/telegram-bot-api/format"
 	"github.com/pkg/errors"
 )
 
-type ID = int64
+type ID = telegram.ID
 
 var (
 	ErrNotFound        = errors.New("not found")
@@ -36,12 +38,20 @@ func (s SubID) String() string {
 	return fmt.Sprintf("%v%s%s%s%s", s.FeedID, SubIDSeparator, s.Vendor, SubIDSeparator, s.ID)
 }
 
+func (s SubID) MetricsLabels() metrics.Labels {
+	return metrics.Labels{
+		"sub_id", s.ID,
+		"vendor", s.Vendor,
+		"feed_id", s.FeedID.String(),
+	}
+}
+
 func ParseSubID(value string) (SubID, error) {
 	tokens := strings.Split(value, SubIDSeparator)
 	if len(tokens) != 3 {
 		return SubID{}, ErrInvalidSubID
 	}
-	feedID, err := strconv.ParseInt(tokens[0], 10, 64)
+	feedID, err := telegram.ParseID(tokens[0])
 	if err != nil {
 		return SubID{}, errors.Wrapf(err, "invalid string id: %s", tokens[2])
 	}
