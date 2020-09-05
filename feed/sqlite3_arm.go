@@ -8,12 +8,12 @@ import (
 )
 
 var columnOrder = []interface{}{
-	goqu.C("sub_id"),
-	goqu.C("vendor"),
-	goqu.C("feed_id"),
-	goqu.C("name"),
-	goqu.C("data"),
-	goqu.C("updated_at"),
+	"sub_id",
+	"vendor",
+	"feed_id",
+	"name",
+	"data",
+	"updated_at",
 }
 
 func (s *SQLite3) selectSubs(ctx context.Context, builder *goqu.SelectDataset) ([]Sub, error) {
