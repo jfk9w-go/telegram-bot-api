@@ -57,31 +57,31 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 				Text:      fmt.Sprintf(`Hello, <i><pre><b><a href="%s"><i>Google</i></a></b></pre></i>`, "https://www.google.com")},
 			&telegram.SendOptions{ReplyToMessageID: cmd.Message.ID})
 	case "/tick":
+		url := "https://thumbs.dreamstime.com/z/black-check-mark-icon-tick-symbol-tick-icon-vector-illustration-flat-ok-sticker-icon-isolated-white-accept-black-check-mark-137505360.jpg"
+		media := format.NewMediaVar()
+		media.Set(format.Media{
+			MIMEType: "image/jpeg",
+			Input:    flu.URL(url),
+		}, nil)
 		err = format.HTML(ctx, bot, true, cmd.Chat.ID).
 			Text("Here's a ").
 			Bold("tick").
 			Italic(" for ya!").
-			Media(format.
-				NewMediaVar("https://thumbs.dreamstime.com/z/black-check-mark-icon-tick-symbol-tick-icon-vector-illustration-flat-ok-sticker-icon-isolated-white-accept-black-check-mark-137505360.jpg").
-				Set(&format.Media{
-					MIMEType: "image/jpeg",
-					Input:    flu.File("tick.jpg"),
-				}, nil), true).
+			Media(url, media, true).
 			Flush()
 
 	case "/lorem":
-		media := format.
-			NewMediaVar("https://thumbs.dreamstime.com/z/black-check-mark-icon-tick-symbol-tick-icon-vector-illustration-flat-ok-sticker-icon-isolated-white-accept-black-check-mark-137505360.jpg").
-			Set(&format.Media{
-				MIMEType: "image/jpeg",
-				Input:    flu.File("tick.jpg"),
-			}, nil)
-
+		url := "https://thumbs.dreamstime.com/z/black-check-mark-icon-tick-symbol-tick-icon-vector-illustration-flat-ok-sticker-icon-isolated-white-accept-black-check-mark-137505360.jpg"
+		media := format.NewMediaVar()
+		media.Set(format.Media{
+			MIMEType: "image/jpeg",
+			Input:    flu.File("tick.jpg"),
+		}, nil)
 		err = format.HTML(ctx, bot, false, cmd.Chat.ID).
 			Text(LoremIpsum).
-			Media(media, false).
-			Media(media, false).
-			Media(media, false).
+			Media(url, media, false).
+			Media(url, media, false).
+			Media(url, media, false).
 			Flush()
 
 	case "/gif":
@@ -138,7 +138,7 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 		} else if _, err := bot.Send(ctx, cmd.Chat.ID,
 			telegram.Text{Text: "Here you go."},
 			&telegram.SendOptions{
-				ReplyMarkup: telegram.InlineKeyboard([][3]string{
+				ReplyMarkup: telegram.InlineKeyboard([]telegram.Button{
 					{"Say " + cmd.Payload, "say", cmd.Payload},
 					{"Another button", "", ""}})}); err != nil {
 			return errors.Wrap(err, "send")
@@ -165,7 +165,7 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 
 type Vendor struct{}
 
-func (v Vendor) Parse(_ context.Context, ref, _ string) (feed.Candidate, error) {
+func (v Vendor) Parse(_ context.Context, ref string, options []string) (feed.Candidate, error) {
 	return feed.Candidate{
 		ID:   ref,
 		Name: ref,
@@ -173,20 +173,21 @@ func (v Vendor) Parse(_ context.Context, ref, _ string) (feed.Candidate, error) 
 	}, nil
 }
 
-func (v Vendor) Load(_ context.Context, data feed.Data, queue chan<- feed.Update) {
+func (v Vendor) Load(ctx context.Context, data feed.Data, queue feed.Queue) {
+	defer queue.Close()
 	var value int
 	if err := data.ReadTo(&value); err != nil {
-		queue <- feed.Update{Error: err}
-	} else {
-		queue <- feed.Update{
-			Write: func(html *format.HTMLWriter) *format.HTMLWriter {
-				return html.Bold("KEK").Text(fmt.Sprintf("\n%d", value))
-			},
-			Data: value + 1,
-		}
+		_ = queue.Submit(ctx, feed.Update{Error: err})
+		return
 	}
 
-	close(queue)
+	_ = queue.Submit(ctx, feed.Update{
+		Write: func(html *format.HTMLWriter) error {
+			html.Bold("KEK").Text(fmt.Sprintf("\n%d", value))
+			return nil
+		},
+		Data: value + 1,
+	})
 }
 
 // This is an example bot which has three commands:
@@ -199,27 +200,28 @@ func (v Vendor) Load(_ context.Context, data feed.Data, queue chan<- feed.Update
 //   cd example/ && go run main.go <token>
 // where <token> is your Telegram Bot API token.
 func main() {
-	store, err := feed.NewSQLite3(nil, ":memory:")
+	feeds, err := feed.NewSQLite3(nil, ":memory:")
 	if err != nil {
 		panic(err)
 	}
-	defer store.Close()
-	_, err = store.Init(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	executor := feed.NewTaskExecutor()
-	defer executor.Close()
+
 	bot := telegram.NewBot(fluhttp.NewTransport().
 		ResponseHeaderTimeout(2*time.Minute).
 		NewClient(), os.Args[1])
+	listener := &feed.CommandListener{
+		Aggregator: feed.NewAggregator(feed.NewTaskExecutor(), feeds, feed.TelegramHTML{bot}, 5*time.Second).
+			Vendor("test_vendor", Vendor{}),
+		Management: feed.NewSupervisorManagement(bot, 50613409),
+	}
+	if err := listener.Init(context.Background()); err != nil {
+		panic(err)
+	}
+
+	defer listener.Close()
 	defer bot.CommandListener(CommandListener{
-		RateLimiter: flu.ConcurrencyRateLimiter(2),
-		CommandListener: &feed.CommandListener{
-			Aggregator: feed.NewAggregator(executor, store, feed.TelegramHTML{bot}, 5*time.Second).
-				Vendor("test_vendor", Vendor{}),
-			Management: feed.NewSupervisorManagement(bot, 50613409),
-		},
+		RateLimiter:     flu.ConcurrencyRateLimiter(2),
+		CommandListener: listener,
 	}).Close()
+
 	flu.AwaitSignal(syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
 }

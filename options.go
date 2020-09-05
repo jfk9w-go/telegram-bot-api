@@ -16,9 +16,9 @@ var GatewaySendDelay = 30 * time.Millisecond
 // SendDelays are delays between two consecutive /send* API calls per chat with a given type.
 var SendDelays = map[ChatType]time.Duration{
 	PrivateChat: 30 * time.Millisecond,
-	GroupChat:   time.Second,
+	GroupChat:   3 * time.Second,
 	Supergroup:  time.Second,
-	Channel:     0,
+	Channel:     3 * time.Second,
 }
 
 type SendOptions struct {

@@ -17,7 +17,7 @@ type Client interface {
 	Username() string
 }
 
-func InlineKeyboard(rows ...[][3]string) ReplyMarkup {
+func InlineKeyboard(rows ...[]Button) ReplyMarkup {
 	keyboard := make([][]InlineKeyboardButton, len(rows))
 	for i, row := range rows {
 		keyboard[i] = make([]InlineKeyboardButton, len(row))

@@ -34,7 +34,7 @@ func (f TelegramHTML) CreateHTMLWriter(ctx context.Context, feedIDs ...ID) (*for
 
 type aggregatorTask struct {
 	htmlWriterFactory HTMLWriterFactory
-	store             Store
+	store             Feeds
 	interval          time.Duration
 	vendors           map[string]Vendor
 	feedID            ID
@@ -42,30 +42,23 @@ type aggregatorTask struct {
 }
 
 func (t *aggregatorTask) Execute(ctx context.Context) error {
-	html, err := t.htmlWriterFactory.CreateHTMLWriter(ctx, t.feedID)
-	if err != nil {
-		return errors.Wrap(err, "create HTMLWriter")
-	}
 	for {
 		sub, err := t.store.Advance(ctx, t.feedID)
 		if err != nil {
 			return errors.Wrap(err, "advance")
 		}
-		vendor, ok := t.vendors[sub.Vendor]
-		if !ok {
-			return errors.Errorf("invalid vendor: %s", sub.Vendor)
-		}
-		if err := t.update(ctx, html, sub, vendor); err != nil {
+
+		if err := t.update(ctx, sub); err != nil {
 			updateErr := err
 			if ctx.Err() != nil {
 				return err
-			} else if err := t.store.Update(ctx, sub.SubID, err); err != nil {
+			} else if err := t.updateStore(sub.SubID, err); err != nil {
 				if ctx.Err() != nil {
 					return err
 				} else {
-					log.Printf("[sub-%s] update failed: %s", sub.SubID, err)
+					log.Printf("[sub > %s] update failed: %s", sub.SubID, err)
 				}
-			} else {
+			} else if t.suspendListener != nil {
 				go t.suspendListener.OnSuspend(sub, updateErr)
 			}
 		}
@@ -79,25 +72,41 @@ func (t *aggregatorTask) Execute(ctx context.Context) error {
 	}
 }
 
-func (t *aggregatorTask) update(ctx context.Context, html *format.HTMLWriter, sub Sub, vendor Vendor) error {
-	queue := make(chan Update, 5)
+func (t *aggregatorTask) update(ctx context.Context, sub Sub) error {
+	vendor, ok := t.vendors[sub.Vendor]
+	if !ok {
+		return errors.Errorf("invalid vendor: %s", sub.Vendor)
+	}
+	queue := NewQueue(sub.SubID, 5)
 	vctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go vendor.Load(vctx, sub.Data, queue)
 	count := 0
-	for update := range queue {
+	defer log.Printf("[sub > %s] processed %d updates", sub.SubID, count)
+	var html *format.HTMLWriter = nil
+	for update := range queue.channel {
 		if update.Error != nil {
 			return errors.Wrap(update.Error, "update")
 		}
-		err := update.Write(html).Flush()
-		if err != nil {
+		if html == nil {
+			var err error
+			html, err = t.htmlWriterFactory.CreateHTMLWriter(ctx, t.feedID)
+			if err != nil {
+				return errors.Wrap(err, "create HTMLWriter")
+			}
+		}
+
+		if err := update.Write(html); err != nil {
 			return errors.Wrap(err, "write")
+		}
+		if err := html.Flush(); err != nil {
+			return errors.Wrap(err, "flush")
 		}
 		data, err := DataFrom(update.Data)
 		if err != nil {
 			return errors.Wrap(err, "wrap data")
 		}
-		err = t.store.Update(ctx, sub.SubID, data)
+		err = t.updateStore(sub.SubID, data)
 		if err != nil {
 			return errors.Wrap(err, "store update")
 		}
@@ -105,25 +114,33 @@ func (t *aggregatorTask) update(ctx context.Context, html *format.HTMLWriter, su
 	}
 
 	if count == 0 {
-		err := t.store.Update(ctx, sub.SubID, sub.Data)
+		err := t.updateStore(sub.SubID, sub.Data)
 		if err != nil {
 			return errors.Wrap(err, "store update")
 		}
 	}
 
-	log.Printf("[sub-%s] processed %d updates", sub.SubID, count)
 	return nil
+}
+
+var updateStoreTimeout = 10 * time.Second
+
+func (t *aggregatorTask) updateStore(subID SubID, value interface{}) error {
+	ctx, cancel := context.WithTimeout(context.Background(), updateStoreTimeout)
+	defer cancel()
+	return t.store.Update(ctx, subID, value)
 }
 
 type Aggregator struct {
 	executor          TaskExecutor
-	store             Store
+	store             Feeds
 	htmlWriterFactory HTMLWriterFactory
 	vendors           map[string]Vendor
 	interval          time.Duration
+	suspendListener   SuspendListener
 }
 
-func NewAggregator(executor TaskExecutor, store Store, htmlWriterFactory HTMLWriterFactory, interval time.Duration) *Aggregator {
+func NewAggregator(executor TaskExecutor, store Feeds, htmlWriterFactory HTMLWriterFactory, interval time.Duration) *Aggregator {
 	return &Aggregator{
 		executor:          executor,
 		store:             store,
@@ -138,6 +155,20 @@ func (a *Aggregator) Vendor(id string, vendor Vendor) *Aggregator {
 	return a
 }
 
+func (a *Aggregator) Init(ctx context.Context, suspendListener SuspendListener) error {
+	a.suspendListener = suspendListener
+	ids, err := a.store.Init(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, id := range ids {
+		a.submitTask(id)
+	}
+
+	return nil
+}
+
 func (a *Aggregator) submitTask(feedID ID) {
 	a.executor.Submit(feedID, &aggregatorTask{
 		htmlWriterFactory: a.htmlWriterFactory,
@@ -145,10 +176,16 @@ func (a *Aggregator) submitTask(feedID ID) {
 		interval:          a.interval,
 		vendors:           a.vendors,
 		feedID:            feedID,
+		suspendListener:   a.suspendListener,
 	})
 }
 
-func (a *Aggregator) Subscribe(ctx context.Context, feedID ID, ref, options string) (Sub, error) {
+func (a *Aggregator) Close() error {
+	a.executor.Close()
+	return a.store.Close()
+}
+
+func (a *Aggregator) Subscribe(ctx context.Context, feedID ID, ref string, options []string) (Sub, error) {
 	for vendorID, vendor := range a.vendors {
 		sub, err := vendor.Parse(ctx, ref, options)
 		switch err {

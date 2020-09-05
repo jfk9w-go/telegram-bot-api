@@ -293,8 +293,22 @@ func (cmd Command) Reply(ctx context.Context, client Client, text string) error 
 	}
 }
 
+type Button [3]string
+
+func (cmd Command) Button(text string) Button {
+	b := new(strings.Builder)
+	writer := csv.NewWriter(b)
+	writer.Comma = ' '
+	if err := writer.Write(cmd.Args); err != nil {
+		return Button{}
+	}
+
+	writer.Flush()
+	return Button{text, cmd.Key, strings.Trim(b.String(), " \n")}
+}
+
 func (cmd Command) String() string {
-	str := fmt.Sprintf("[cmd-%s+%s] %s", cmd.User.ID, cmd.Chat.ID, cmd.Key)
+	str := fmt.Sprintf("[cmd > %s+%s] %s", cmd.User.ID, cmd.Chat.ID, cmd.Key)
 	if cmd.Payload != "" {
 		str += " " + cmd.Payload
 	}

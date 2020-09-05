@@ -9,9 +9,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+var ErrIgnoredMedia = errors.New("ignored media")
+
 type Transport interface {
 	Text(ctx context.Context, text string, preview bool) error
-	Media(ctx context.Context, media *Media, mediaErr error, text string) error
+	Media(ctx context.Context, media Media, mediaErr error, text string) error
 }
 
 const (
@@ -81,10 +83,15 @@ func (t *TelegramTransport) Text(ctx context.Context, text string, preview bool)
 	return t.send(ctx, t.ChatIDs, telegram.Text{
 		Text:                  text,
 		ParseMode:             getParseMode(ctx),
-		DisableWebPagePreview: !preview})
+		DisableWebPagePreview: !preview,
+	})
 }
 
-func (t *TelegramTransport) Media(ctx context.Context, media *Media, mediaErr error, caption string) error {
+func (t *TelegramTransport) Media(ctx context.Context, media Media, mediaErr error, caption string) error {
+	if mediaErr == ErrIgnoredMedia {
+		return nil
+	}
+
 	if mediaErr == nil {
 		chatID := t.ChatIDs[0]
 		if message, err := t.Sender.Send(ctx, chatID,
@@ -121,7 +128,7 @@ func (t *TelegramTransport) Media(ctx context.Context, media *Media, mediaErr er
 		}
 	}
 
-	log.Printf("Failed to send initial HTML media message (below) to %s: %s\n%s", t.ChatIDs[0], mediaErr, caption)
+	log.Printf("[chat > %s] failed to send media message: %s\n%s", t.ChatIDs[0], mediaErr, caption)
 	return t.Text(ctx, caption, true)
 }
 
@@ -140,7 +147,7 @@ func (b *BufferTransport) Text(ctx context.Context, text string, preview bool) e
 	return nil
 }
 
-func (b *BufferTransport) Media(ctx context.Context, media *Media, mediaErr error, text string) error {
+func (b *BufferTransport) Media(ctx context.Context, media Media, mediaErr error, text string) error {
 	if text != "" {
 		return b.Text(ctx, text, false)
 	}

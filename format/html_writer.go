@@ -90,7 +90,11 @@ type HTMLWriter struct {
 	err          error
 }
 
-var DefaultMaxMessageSize = telegram.MaxMessageSize
+var (
+	DefaultLinkAllocSize  = 200
+	DefaultMaxMessageSize = telegram.MaxMessageSize - DefaultLinkAllocSize
+	DefaultMaxCaptionSize = telegram.MaxCaptionSize - DefaultLinkAllocSize
+)
 
 func HTMLWithTransport(ctx context.Context, transport Transport) *HTMLWriter {
 	return &HTMLWriter{
@@ -253,11 +257,11 @@ func (w *HTMLWriter) MarkupString(markup string) *HTMLWriter {
 	return w.Markup(strings.NewReader(markup))
 }
 
-func (w *HTMLWriter) Media(mediaRef MediaRef, collapsible bool) *HTMLWriter {
+func (w *HTMLWriter) Media(url string, ref MediaRef, collapsible bool) *HTMLWriter {
 	if w.err != nil || w.Session.Overflow {
 		return nil
 	}
-	w.err = w.Session.Media(mediaRef, HTMLAnchor("[media]", mediaRef.URL()), collapsible)
+	w.err = w.Session.Media(ref, HTMLAnchor("[media]", url), collapsible)
 	return w
 }
 

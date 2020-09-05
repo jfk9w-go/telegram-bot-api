@@ -83,7 +83,7 @@ type Sub struct {
 	UpdatedAt *time.Time `db:"updated_at"`
 }
 
-type WriteHTML func(html *format.HTMLWriter) *format.HTMLWriter
+type WriteHTML func(html *format.HTMLWriter) error
 
 type Update struct {
 	Write WriteHTML
@@ -98,11 +98,11 @@ type Candidate struct {
 }
 
 type Vendor interface {
-	Parse(ctx context.Context, ref, options string) (Candidate, error)
-	Load(ctx context.Context, data Data, queue chan<- Update)
+	Parse(ctx context.Context, ref string, options []string) (Candidate, error)
+	Load(ctx context.Context, data Data, queue Queue)
 }
 
-type Store interface {
+type Feeds interface {
 	io.Closer
 	Init(ctx context.Context) ([]ID, error)
 	Create(ctx context.Context, sub Sub) error
@@ -112,4 +112,33 @@ type Store interface {
 	Clear(ctx context.Context, feedID ID, pattern string) (int64, error)
 	Delete(ctx context.Context, id SubID) error
 	Update(ctx context.Context, id SubID, value interface{}) error
+}
+
+type Hashes interface {
+	Check(ctx context.Context, feedID ID, hash string) error
+}
+
+type Queue struct {
+	channel chan Update
+	SubID   SubID
+}
+
+func NewQueue(subID SubID, size int) Queue {
+	return Queue{
+		SubID:   subID,
+		channel: make(chan Update, size),
+	}
+}
+
+func (q Queue) Submit(ctx context.Context, update Update) error {
+	select {
+	case q.channel <- update:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (q Queue) Close() {
+	close(q.channel)
 }

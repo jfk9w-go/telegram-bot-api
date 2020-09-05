@@ -44,7 +44,7 @@ func (e *DefaultExecutor) Submit(id interface{}, task Task) {
 	ctx, cancel := context.WithCancel(e.ctx)
 	e.work.Add(1)
 	e.tasks[id] = cancel
-	log.Printf("[task-%v] started", id)
+	log.Printf("[task > %v] started", id)
 	go e.execute(ctx, id, task)
 }
 
@@ -55,7 +55,7 @@ func (e *DefaultExecutor) execute(ctx context.Context, id interface{}, task Task
 	}()
 
 	if err := task.Execute(ctx); err != nil {
-		log.Printf("[task-%v] %s", id, err)
+		log.Printf("[task > %v] %s", id, err)
 		return
 	}
 }

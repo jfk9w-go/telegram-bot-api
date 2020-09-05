@@ -11,11 +11,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-type WriteHTMLWithChatHref func(html *format.HTMLWriter, chatHref string) *format.HTMLWriter
+type WriteHTMLWithChatLink func(html *format.HTMLWriter, chatLink string) *format.HTMLWriter
 
 type Management interface {
 	CheckAccess(ctx context.Context, userID telegram.ID, chatID telegram.ID) (context.Context, error)
-	NotifyAdmins(ctx context.Context, chatID telegram.ID, markup telegram.ReplyMarkup, writeHTML WriteHTMLWithChatHref) error
+	NotifyAdmins(ctx context.Context, chatID telegram.ID, markup telegram.ReplyMarkup, writeHTML WriteHTMLWithChatLink) error
 	GetChatLink(ctx context.Context, chatID telegram.ID) string
 }
 
@@ -82,10 +82,10 @@ func (s *Supervisor) CheckAccess(ctx context.Context, userID telegram.ID, _ tele
 	}
 }
 
-func (s *Supervisor) NotifyAdmins(ctx context.Context, chatID telegram.ID, markup telegram.ReplyMarkup, writeHTML WriteHTMLWithChatHref) error {
-	chatHref := s.GetChatLink(ctx, chatID)
+func (s *Supervisor) NotifyAdmins(ctx context.Context, chatID telegram.ID, markup telegram.ReplyMarkup, writeHTML WriteHTMLWithChatLink) error {
+	chatLink := s.GetChatLink(ctx, chatID)
 	transport := format.NewBufferTransport()
-	if err := writeHTML(format.HTMLWithTransport(ctx, transport), chatHref).Flush(); err != nil {
+	if err := writeHTML(format.HTMLWithTransport(ctx, transport), chatLink).Flush(); err != nil {
 		return errors.Wrap(err, "flush")
 	}
 
@@ -121,9 +121,18 @@ func (s *Supervisor) NotifyAdmins(ctx context.Context, chatID telegram.ID, marku
 }
 
 type CommandListener struct {
+	Context    context.Context
 	Aggregator *Aggregator
 	Management Management
 	Aliases    map[string]telegram.ID
+}
+
+func (c *CommandListener) Init(ctx context.Context) error {
+	return c.Aggregator.Init(ctx, c)
+}
+
+func (c *CommandListener) Close() error {
+	return c.Aggregator.Close()
 }
 
 const (
@@ -164,7 +173,12 @@ func (c *CommandListener) OnCommand(ctx context.Context, client telegram.Client,
 }
 
 func (c *CommandListener) background() (context.Context, func()) {
-	return context.WithTimeout(context.Background(), time.Minute)
+	ctx := c.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	return context.WithTimeout(ctx, time.Minute)
 }
 
 var (
@@ -194,10 +208,13 @@ func (c *CommandListener) resolveChatID(ctx context.Context, client telegram.Cli
 		} else {
 			chat, err := client.GetChat(ctx, telegram.Username(cmd.Args[1]))
 			if err != nil {
-				return nil, 0, errors.Wrap(err, "get chat")
+				chatID, err = telegram.ParseID(cmd.Args[1])
+				if err != nil {
+					return nil, 0, errors.Wrap(err, "parse chat ID")
+				}
+			} else {
+				chatID = chat.ID
 			}
-
-			chatID = chat.ID
 		}
 	}
 
@@ -230,9 +247,9 @@ func (c *CommandListener) Subscribe(ctx context.Context, client telegram.Client,
 	if err != nil {
 		return err
 	}
-	options := ""
+	var options []string
 	if len(cmd.Args) > 2 {
-		options = cmd.Args[2]
+		options = cmd.Args[2:]
 	}
 
 	sub, err := c.Aggregator.Subscribe(ctx, ID(chatID), ref, options)
@@ -247,12 +264,12 @@ func (c *CommandListener) OnSubscribe(sub Sub) {
 	ctx, cancel := c.background()
 	defer cancel()
 	_ = c.Management.NotifyAdmins(ctx, telegram.ID(sub.FeedID),
-		telegram.InlineKeyboard([][3]string{
-			{"Suspend", suspendCommandKey, sub.SubID.String()},
+		telegram.InlineKeyboard([]telegram.Button{
+			telegram.Command{Key: suspendCommandKey, Args: []string{sub.SubID.String()}}.Button("Suspend"),
 		}),
-		func(html *format.HTMLWriter, chatHref string) *format.HTMLWriter {
+		func(html *format.HTMLWriter, chatLink string) *format.HTMLWriter {
 			return html.Text(sub.Name+" @ ").
-				Link("chat", chatHref).
+				Link("chat", chatLink).
 				Text(" 🔥")
 		})
 }
@@ -275,13 +292,13 @@ func (c *CommandListener) OnSuspend(sub Sub, err error) {
 	defer cancel()
 	_ = c.Management.NotifyAdmins(ctx, telegram.ID(sub.FeedID),
 		// by column
-		telegram.InlineKeyboard([][3]string{
-			{"Resume", resumeCommandKey, sub.SubID.String()},
-			{"Delete", deleteCommandKey, sub.SubID.String()},
+		telegram.InlineKeyboard([]telegram.Button{
+			telegram.Command{Key: resumeCommandKey, Args: []string{sub.SubID.String()}}.Button("Resume"),
+			telegram.Command{Key: deleteCommandKey, Args: []string{sub.SubID.String()}}.Button("Delete"),
 		}),
-		func(html *format.HTMLWriter, chatHref string) *format.HTMLWriter {
+		func(html *format.HTMLWriter, chatLink string) *format.HTMLWriter {
 			return html.Text(sub.Name+" @ ").
-				Link("chat", chatHref).
+				Link("chat", chatLink).
 				Text(" 🛑\n" + err.Error())
 		})
 }
@@ -303,12 +320,12 @@ func (c *CommandListener) OnResume(sub Sub) {
 	ctx, cancel := c.background()
 	defer cancel()
 	_ = c.Management.NotifyAdmins(ctx, telegram.ID(sub.FeedID),
-		telegram.InlineKeyboard([][3]string{
-			{"Suspend", suspendCommandKey, sub.SubID.String()},
+		telegram.InlineKeyboard([]telegram.Button{
+			telegram.Command{Key: suspendCommandKey, Args: []string{sub.SubID.String()}}.Button("Suspend"),
 		}),
-		func(html *format.HTMLWriter, chatHref string) *format.HTMLWriter {
+		func(html *format.HTMLWriter, chatLink string) *format.HTMLWriter {
 			return html.Text(sub.Name+" @ ").
-				Link("chat", chatHref).
+				Link("chat", chatLink).
 				Text(" 🔥")
 		})
 }
@@ -330,9 +347,9 @@ func (c *CommandListener) OnDelete(sub Sub) {
 	ctx, cancel := c.background()
 	defer cancel()
 	_ = c.Management.NotifyAdmins(ctx, telegram.ID(sub.FeedID), nil,
-		func(html *format.HTMLWriter, chatHref string) *format.HTMLWriter {
+		func(html *format.HTMLWriter, chatLink string) *format.HTMLWriter {
 			return html.Text(sub.Name+" @ ").
-				Link("chat", chatHref).
+				Link("chat", chatLink).
 				Text(" 🗑")
 		})
 }
@@ -358,9 +375,9 @@ func (c *CommandListener) OnClear(feedID ID, pattern string, count int64) {
 	ctx, cancel := c.background()
 	defer cancel()
 	_ = c.Management.NotifyAdmins(ctx, telegram.ID(feedID), nil,
-		func(html *format.HTMLWriter, chatHref string) *format.HTMLWriter {
+		func(html *format.HTMLWriter, chatLink string) *format.HTMLWriter {
 			return html.Text(fmt.Sprintf("%d subs @ ", count)).
-				Link("chat", chatHref).
+				Link("chat", chatLink).
 				Text(" 🗑 (" + pattern + ")")
 		})
 }
@@ -382,9 +399,9 @@ func (c *CommandListener) List(ctx context.Context, client telegram.Client, cmd 
 	}
 
 	// by row
-	keyboard := make([][][3]string, len(subs))
+	keyboard := make([][]telegram.Button, len(subs))
 	for i, sub := range subs {
-		keyboard[i] = [][3]string{{sub.Name, changeCmd, sub.SubID.String()}}
+		keyboard[i] = []telegram.Button{telegram.Command{Key: changeCmd, Args: []string{sub.SubID.String()}}.Button(sub.Name)}
 	}
 
 	_, err = client.Send(ctx, chatID,

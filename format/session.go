@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	telegram "github.com/jfk9w-go/telegram-bot-api"
@@ -60,7 +61,12 @@ func (s *Session) Break() error {
 }
 
 func (s *Session) Flush() error {
-	return s.Break()
+	if err := s.Break(); err != nil {
+		return err
+	}
+
+	s.currCount = 0
+	return nil
 }
 
 func (s *Session) Capacity() int {
@@ -149,6 +155,8 @@ func (s *Session) Media(ref MediaRef, anchor string, collapsible bool) error {
 		}
 	}
 
-	media, mediaErr := ref.Get(s.Context)
+	ctx, cancel := context.WithTimeout(s.Context, 10*time.Minute)
+	media, mediaErr := ref.Get(ctx)
+	cancel()
 	return s.Transport.Media(s.Context, media, mediaErr, caption)
 }
