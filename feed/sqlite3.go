@@ -123,7 +123,7 @@ func (s *SQLite3) QuerySQLBuilder(ctx context.Context, builder SQLBuilder) (*sql
 
 func (s *SQLite3) Create(ctx context.Context, sub Sub) error {
 	defer s.Lock().Unlock()
-	ok, err := s.UpdateSQLBuilder(ctx, s.Insert(SQLite3FeedTableName).Rows(sub).OnConflict(goqu.DoNothing()))
+	ok, err := s.UpdateSQLBuilder(ctx, insertSub(s.Insert(SQLite3FeedTableName).OnConflict(goqu.DoNothing()), sub))
 	if err == nil && !ok {
 		err = ErrExists
 	}

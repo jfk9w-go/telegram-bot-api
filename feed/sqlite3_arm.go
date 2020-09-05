@@ -7,15 +7,17 @@ import (
 	"github.com/pkg/errors"
 )
 
+var columnOrder = []interface{}{
+	goqu.C("sub_id"),
+	goqu.C("vendor"),
+	goqu.C("feed_id"),
+	goqu.C("name"),
+	goqu.C("data"),
+	goqu.C("updated_at"),
+}
+
 func (s *SQLite3) selectSubs(ctx context.Context, builder *goqu.SelectDataset) ([]Sub, error) {
-	rows, err := s.QuerySQLBuilder(ctx, builder.
-		Select(
-			goqu.C("sub_id"),
-			goqu.C("vendor"),
-			goqu.C("feed_id"),
-			goqu.C("name"),
-			goqu.C("data"),
-			goqu.C("updated_at")))
+	rows, err := s.QuerySQLBuilder(ctx, builder.Select(columnOrder))
 	if err != nil {
 		return nil, errors.Wrap(err, "query")
 	}
@@ -38,4 +40,17 @@ func (s *SQLite3) selectSubs(ctx context.Context, builder *goqu.SelectDataset) (
 	}
 
 	return subs, nil
+}
+
+func insertSub(id *goqu.InsertDataset, sub Sub) *goqu.InsertDataset {
+	return id.
+		Cols(columnOrder).
+		Vals([]interface{}{
+			sub.SubID.ID,
+			sub.SubID.Vendor,
+			sub.SubID.FeedID,
+			sub.Name,
+			sub.Data,
+			sub.UpdatedAt,
+		})
 }

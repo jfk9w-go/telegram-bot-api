@@ -10,3 +10,7 @@ func (s *SQLite3) selectSubs(ctx context.Context, sd *goqu.SelectDataset) ([]Sub
 	subs := make([]Sub, 0)
 	return subs, sd.Select(Sub{}).ScanStructsContext(ctx, &subs)
 }
+
+func insertSub(id *goqu.InsertDataset, sub Sub) *goqu.InsertDataset {
+	return id.Rows(sub)
+}
