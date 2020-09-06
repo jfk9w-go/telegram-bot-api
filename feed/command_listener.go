@@ -423,7 +423,7 @@ func (c *CommandListener) List(ctx context.Context, client telegram.Client, cmd 
 		keyboard[i] = []telegram.Button{telegram.Command{Key: changeCmd, Args: []string{sub.SubID.String()}}.Button(sub.Name)}
 	}
 
-	_, err = client.Send(ctx, chatID,
+	_, err = client.Send(ctx, cmd.Chat.ID,
 		telegram.Text{
 			ParseMode: telegram.HTML,
 			Text: fmt.Sprintf(
@@ -433,7 +433,8 @@ func (c *CommandListener) List(ctx context.Context, client telegram.Client, cmd 
 				status),
 			DisableWebPagePreview: true},
 		&telegram.SendOptions{
-			ReplyMarkup: telegram.InlineKeyboard(keyboard...)})
+			ReplyMarkup:      telegram.InlineKeyboard(keyboard...),
+			ReplyToMessageID: cmd.Message.ID})
 	return err
 }
 
