@@ -399,22 +399,22 @@ func (c *CommandListener) List(ctx context.Context, client telegram.Client, cmd 
 		return err
 	}
 
-	active := len(cmd.Args) <= 1 || cmd.Args[1] != suspendCommandKey
+	active := len(cmd.Args) > 1 && cmd.Args[1] == resumeCommandKey
 	subs, err := c.Aggregator.List(ctx, ID(chatID), active)
 	if err != nil {
 		return err
 	}
-	if active && len(subs) == 0 {
-		active = false
+	if !active && len(subs) == 0 {
+		active = true
 		subs, err = c.Aggregator.List(ctx, ID(chatID), active)
 		if err != nil {
 			return err
 		}
 	}
 
-	status, changeCmd := "🔥", suspendCommandKey
-	if !active {
-		status, changeCmd = "🛑", resumeCommandKey
+	status, changeCmd := "🛑", resumeCommandKey
+	if active {
+		status, changeCmd = "🔥", suspendCommandKey
 	}
 
 	// by row

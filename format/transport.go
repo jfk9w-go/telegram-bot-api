@@ -80,6 +80,10 @@ func (t *TelegramTransport) send(ctx context.Context, chatIDs []telegram.ChatID,
 }
 
 func (t *TelegramTransport) Text(ctx context.Context, text string, preview bool) error {
+	if text == "" {
+		return nil
+	}
+
 	return t.send(ctx, t.ChatIDs, telegram.Text{
 		Text:                  text,
 		ParseMode:             getParseMode(ctx),

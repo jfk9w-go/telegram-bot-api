@@ -89,19 +89,14 @@ func (t *aggregatorTask) update(ctx context.Context, sub Sub) error {
 	go vendor.Load(vctx, sub.Data, queue)
 	count := 0
 	defer func() { log.Printf("[sub > %s] processed %d updates", sub.SubID, count) }()
-	var html *format.HTMLWriter = nil
 	for update := range queue.channel {
 		if update.Error != nil {
 			return errors.Wrap(update.Error, "update")
 		}
-		if html == nil {
-			var err error
-			html, err = t.htmlWriterFactory.CreateHTMLWriter(ctx, t.feedID)
-			if err != nil {
-				return errors.Wrap(err, "create HTMLWriter")
-			}
+		html, err := t.htmlWriterFactory.CreateHTMLWriter(ctx, t.feedID)
+		if err != nil {
+			return errors.Wrap(err, "create HTMLWriter")
 		}
-
 		if err := update.Write(html); err != nil {
 			return errors.Wrap(err, "write")
 		}
