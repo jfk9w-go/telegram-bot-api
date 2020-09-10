@@ -5,9 +5,9 @@ import (
 	"crypto/md5"
 	"fmt"
 	"log"
+	"mime"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -115,6 +115,8 @@ func (m *MediaManager) Close() {
 	m.work.Wait()
 }
 
+const UnknownSize int64 = -1
+
 type MediaRef struct {
 	MediaResolver
 	Manager     *MediaManager
@@ -136,11 +138,15 @@ func (r *MediaRef) getClient() *fluhttp.Client {
 }
 
 func (r *MediaRef) Handle(resp *http.Response) error {
-	r.MIMEType = strings.Split(resp.Header.Get("Content-Type"), ";")[0]
 	var err error
+	r.MIMEType, _, err = mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil {
+		return errors.Wrapf(err, "failed to parse Content-Type: %s", resp.Header.Get("Content-Type"))
+	}
+
 	r.Size, err = strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
 	if err != nil {
-		return errors.Wrap(err, "parse content length")
+		r.Size = UnknownSize
 	}
 
 	return nil
@@ -172,20 +178,22 @@ func (r *MediaRef) Get(ctx context.Context) (format.Media, error) {
 			return format.Media{}, errors.Wrap(err, "head")
 		}
 
-		if r.Size < r.Manager.SizeBounds[0] {
-			r.Manager.Metrics.Counter("err", metrics.Labels{
-				"feed_id", PrintID(r.FeedID),
-				"mime_type", r.MIMEType,
-				"err", "too small",
-			}).Inc()
-			return format.Media{}, errors.Errorf("size of %db is too low", r.Size)
-		} else if r.Size > r.Manager.SizeBounds[1] {
-			r.Manager.Metrics.Counter("err", metrics.Labels{
-				"feed_id", PrintID(r.FeedID),
-				"mime_type", r.MIMEType,
-				"err", "too large",
-			}).Inc()
-			return format.Media{}, errors.Errorf("size %dMb too large", r.Size>>20)
+		if r.Size != UnknownSize {
+			if r.Size < r.Manager.SizeBounds[0] {
+				r.Manager.Metrics.Counter("err", metrics.Labels{
+					"feed_id", PrintID(r.FeedID),
+					"mime_type", r.MIMEType,
+					"err", "too small",
+				}).Inc()
+				return format.Media{}, errors.Errorf("size of %db is too low", r.Size)
+			} else if r.Size > r.Manager.SizeBounds[1] {
+				r.Manager.Metrics.Counter("err", metrics.Labels{
+					"feed_id", PrintID(r.FeedID),
+					"mime_type", r.MIMEType,
+					"err", "too large",
+				}).Inc()
+				return format.Media{}, errors.Errorf("size %dMb too large", r.Size>>20)
+			}
 		}
 	}
 
@@ -214,7 +222,7 @@ func (r *MediaRef) Get(ctx context.Context) (format.Media, error) {
 		return format.Media{}, errors.Errorf("unsupported mime type: %s", mimeType)
 	}
 
-	if r.Size <= mediaType.RemoteMaxSize() && !r.Dedup && !r.Blob {
+	if r.Size != UnknownSize && r.Size <= mediaType.RemoteMaxSize() && !r.Dedup && !r.Blob {
 		r.Manager.Metrics.Counter("ok", metrics.Labels{
 			"feed_id", PrintID(r.FeedID),
 			"mime_type", r.MIMEType,
@@ -226,17 +234,18 @@ func (r *MediaRef) Get(ctx context.Context) (format.Media, error) {
 		}, nil
 	}
 
-	if r.Size <= mediaType.AttachMaxSize() {
+	if r.Size == UnknownSize || r.Size <= mediaType.AttachMaxSize() {
 		blob, err := r.Manager.Storage.Alloc()
 		if err != nil {
 			return format.Media{}, errors.Wrap(err, "create blob")
 		}
 
+		counter := &flu.IOCounter{Output: blob}
 		if err := r.Request(r.getClient().GET(r.ResolvedURL)).
 			Context(ctx).
 			Execute().
 			CheckStatus(http.StatusOK).
-			DecodeBodyTo(blob).
+			DecodeBodyTo(counter).
 			Error; err != nil {
 			r.Manager.Metrics.Counter("err", metrics.Labels{
 				"feed_id", PrintID(r.FeedID),
@@ -246,28 +255,30 @@ func (r *MediaRef) Get(ctx context.Context) (format.Media, error) {
 			return format.Media{}, errors.Wrap(err, "download")
 		}
 
-		if r.Dedup {
-			if err := r.Manager.Dedup.Check(ctx, r.FeedID, r.URL, blob); err != nil {
-				r.Manager.Metrics.Counter("err", metrics.Labels{
-					"feed_id", PrintID(r.FeedID),
-					"mime_type", r.MIMEType,
-					"err", "dedup",
-				}).Inc()
+		if counter.Value() <= mediaType.AttachMaxSize() {
+			if r.Dedup {
+				if err := r.Manager.Dedup.Check(ctx, r.FeedID, r.URL, blob); err != nil {
+					r.Manager.Metrics.Counter("err", metrics.Labels{
+						"feed_id", PrintID(r.FeedID),
+						"mime_type", r.MIMEType,
+						"err", "dedup",
+					}).Inc()
 
-				log.Printf("[media > %d > %s] failed dedup check: %s", r.FeedID, r.URL, err)
-				return format.Media{}, err
+					log.Printf("[media > %d > %s] failed dedup check: %s", r.FeedID, r.URL, err)
+					return format.Media{}, err
+				}
 			}
-		}
 
-		r.Manager.Metrics.Counter("ok", metrics.Labels{
-			"feed_id", PrintID(r.FeedID),
-			"mime_type", r.MIMEType,
-			"method", "attach",
-		}).Inc()
-		return format.Media{
-			MIMEType: mimeType,
-			Input:    blob,
-		}, nil
+			r.Manager.Metrics.Counter("ok", metrics.Labels{
+				"feed_id", PrintID(r.FeedID),
+				"mime_type", r.MIMEType,
+				"method", "attach",
+			}).Inc()
+			return format.Media{
+				MIMEType: mimeType,
+				Input:    blob,
+			}, nil
+		}
 	}
 
 	r.Manager.Metrics.Counter("err", metrics.Labels{

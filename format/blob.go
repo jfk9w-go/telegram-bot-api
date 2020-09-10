@@ -1,6 +1,7 @@
 package format
 
 import (
+	"log"
 	"math/rand"
 	"os"
 	"sync"
@@ -28,7 +29,7 @@ type FileBlobStorage struct {
 }
 
 func (s *FileBlobStorage) Init() (*FileBlobStorage, error) {
-	_ = os.RemoveAll(s.Directory)
+	s.Remove()
 	if err := os.MkdirAll(s.Directory, 0755); err != nil {
 		return nil, errors.Wrapf(err, "create temp dir: %s", s.Directory)
 	}
@@ -39,11 +40,6 @@ func (s *FileBlobStorage) Init() (*FileBlobStorage, error) {
 	}
 
 	return s, nil
-}
-
-func (s *FileBlobStorage) clean() {
-	defer s.Lock().Unlock()
-
 }
 
 var (
@@ -66,15 +62,18 @@ func (s *FileBlobStorage) Alloc() (Blob, error) {
 	file := flu.File(s.Directory + "/" + s.newID())
 	s.files[file] = now
 	if now.Sub(s.lastCleanTime) > s.CleanInterval {
+		count := 0
 		for file, createdAt := range s.files {
 			if now.Sub(createdAt) > s.TTL {
 				_ = os.RemoveAll(file.Path())
 			}
 
 			delete(s.files, file)
+			count++
 		}
 
 		s.lastCleanTime = now
+		log.Printf("[blobs] deleted %d files", count)
 	}
 
 	return file, nil
