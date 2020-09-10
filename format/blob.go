@@ -65,11 +65,14 @@ func (s *FileBlobStorage) Alloc() (Blob, error) {
 		count := 0
 		for file, createdAt := range s.files {
 			if now.Sub(createdAt) > s.TTL {
-				_ = os.RemoveAll(file.Path())
-			}
+				if err := os.RemoveAll(file.Path()); err != nil {
+					log.Printf("[blobs] failed to remove %s: %s", file, err)
+					continue
+				}
 
-			delete(s.files, file)
-			count++
+				delete(s.files, file)
+				count++
+			}
 		}
 
 		s.lastCleanTime = now
