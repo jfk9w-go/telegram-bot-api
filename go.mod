@@ -2,7 +2,7 @@ module github.com/jfk9w-go/telegram-bot-api
 
 require (
 	github.com/doug-martin/goqu/v9 v9.9.0
-	github.com/jfk9w-go/flu v0.9.17-0.20200911055344-612a10a689bf
+	github.com/jfk9w-go/flu v0.9.17-0.20200911110833-4ba12d7ee95b
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.6.0
