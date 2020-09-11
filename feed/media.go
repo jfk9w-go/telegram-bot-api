@@ -29,7 +29,7 @@ type (
 
 	MediaConverter interface {
 		MIMETypes() []string
-		Convert(ref *MediaRef) (format.MediaRef, error)
+		Convert(ctx context.Context, ref *MediaRef) (format.MediaRef, error)
 	}
 
 	MediaDedup interface {
@@ -152,15 +152,27 @@ func (r *MediaRef) Handle(resp *http.Response) error {
 	return nil
 }
 
+func (r *MediaRef) incrementMediaMethod(mimeType string, method string) {
+	r.Manager.Metrics.Counter("err", metrics.Labels{
+		"feed_id", PrintID(r.FeedID),
+		"mime_type", mimeType,
+		"method", method,
+	})
+}
+
+func (r *MediaRef) incrementMediaError(mimeType string, err string) {
+	r.Manager.Metrics.Counter("err", metrics.Labels{
+		"feed_id", PrintID(r.FeedID),
+		"mime_type", mimeType,
+		"err", err,
+	})
+}
+
 func (r *MediaRef) Get(ctx context.Context) (format.Media, error) {
 	var err error
 	r.ResolvedURL, err = r.ResolveURL(ctx, r.getClient(), r.URL, telegram.Video.AttachMaxSize())
 	if err != nil {
-		r.Manager.Metrics.Counter("err", metrics.Labels{
-			"feed_id", PrintID(r.FeedID),
-			"mime_type", "unknown",
-			"err", "resolve url",
-		}).Inc()
+		r.incrementMediaError("unknown", "resolve url")
 		return format.Media{}, errors.Wrapf(err, "resolve url: %s", r.URL)
 	}
 
@@ -170,28 +182,16 @@ func (r *MediaRef) Get(ctx context.Context) (format.Media, error) {
 			Execute().
 			HandleResponse(r).
 			Error; err != nil {
-			r.Manager.Metrics.Counter("err", metrics.Labels{
-				"feed_id", PrintID(r.FeedID),
-				"mime_type", "unknown",
-				"err", "head",
-			}).Inc()
+			r.incrementMediaError("unknown", "head")
 			return format.Media{}, errors.Wrap(err, "head")
 		}
 
 		if r.Size != UnknownSize {
 			if r.Size < r.Manager.SizeBounds[0] {
-				r.Manager.Metrics.Counter("err", metrics.Labels{
-					"feed_id", PrintID(r.FeedID),
-					"mime_type", r.MIMEType,
-					"err", "too small",
-				}).Inc()
+				r.incrementMediaError(r.MIMEType, "too small")
 				return format.Media{}, errors.Errorf("size of %db is too low", r.Size)
 			} else if r.Size > r.Manager.SizeBounds[1] {
-				r.Manager.Metrics.Counter("err", metrics.Labels{
-					"feed_id", PrintID(r.FeedID),
-					"mime_type", r.MIMEType,
-					"err", "too large",
-				}).Inc()
+				r.incrementMediaError(r.MIMEType, "too large")
 				return format.Media{}, errors.Errorf("size %dMb too large", r.Size>>20)
 			}
 		}
@@ -199,13 +199,9 @@ func (r *MediaRef) Get(ctx context.Context) (format.Media, error) {
 
 	mimeType := r.MIMEType
 	if converter, ok := r.Manager.Converters[mimeType]; ok {
-		ref, err := converter.Convert(r)
+		ref, err := converter.Convert(ctx, r)
 		if err != nil {
-			r.Manager.Metrics.Counter("err", metrics.Labels{
-				"feed_id", PrintID(r.FeedID),
-				"mime_type", r.MIMEType,
-				"err", "convert",
-			}).Inc()
+			r.incrementMediaError(r.MIMEType, "convert")
 			return format.Media{}, errors.Wrapf(err, "convert from %s", mimeType)
 		}
 
@@ -214,20 +210,12 @@ func (r *MediaRef) Get(ctx context.Context) (format.Media, error) {
 
 	mediaType := telegram.MediaTypeByMIMEType(mimeType)
 	if mediaType == telegram.DefaultMediaType {
-		r.Manager.Metrics.Counter("err", metrics.Labels{
-			"feed_id", PrintID(r.FeedID),
-			"mime_type", r.MIMEType,
-			"err", "mime",
-		}).Inc()
+		r.incrementMediaError(r.MIMEType, "mime")
 		return format.Media{}, errors.Errorf("unsupported mime type: %s", mimeType)
 	}
 
 	if r.Size != UnknownSize && r.Size <= mediaType.RemoteMaxSize() && !r.Dedup && !r.Blob {
-		r.Manager.Metrics.Counter("ok", metrics.Labels{
-			"feed_id", PrintID(r.FeedID),
-			"mime_type", r.MIMEType,
-			"method", "remote",
-		}).Inc()
+		r.incrementMediaMethod(r.MIMEType, "remote")
 		return format.Media{
 			MIMEType: mimeType,
 			Input:    flu.URL(r.ResolvedURL),
@@ -247,33 +235,20 @@ func (r *MediaRef) Get(ctx context.Context) (format.Media, error) {
 			CheckStatus(http.StatusOK).
 			DecodeBodyTo(counter).
 			Error; err != nil {
-			r.Manager.Metrics.Counter("err", metrics.Labels{
-				"feed_id", PrintID(r.FeedID),
-				"mime_type", r.MIMEType,
-				"err", "download",
-			}).Inc()
+			r.incrementMediaError(r.MIMEType, "download")
 			return format.Media{}, errors.Wrap(err, "download")
 		}
 
 		if counter.Value() <= mediaType.AttachMaxSize() {
 			if r.Dedup {
 				if err := r.Manager.Dedup.Check(ctx, r.FeedID, r.URL, blob); err != nil {
-					r.Manager.Metrics.Counter("err", metrics.Labels{
-						"feed_id", PrintID(r.FeedID),
-						"mime_type", r.MIMEType,
-						"err", "dedup",
-					}).Inc()
-
+					r.incrementMediaError(r.MIMEType, "dedup")
 					log.Printf("[media > %d > %s] failed dedup check: %s", r.FeedID, r.URL, err)
 					return format.Media{}, err
 				}
 			}
 
-			r.Manager.Metrics.Counter("ok", metrics.Labels{
-				"feed_id", PrintID(r.FeedID),
-				"mime_type", r.MIMEType,
-				"method", "attach",
-			}).Inc()
+			r.incrementMediaMethod(r.MIMEType, "attach")
 			return format.Media{
 				MIMEType: mimeType,
 				Input:    blob,
@@ -281,11 +256,7 @@ func (r *MediaRef) Get(ctx context.Context) (format.Media, error) {
 		}
 	}
 
-	r.Manager.Metrics.Counter("err", metrics.Labels{
-		"feed_id", PrintID(r.FeedID),
-		"mime_type", r.MIMEType,
-		"err", "too large",
-	}).Inc()
+	r.incrementMediaError(r.MIMEType, "too large")
 	return format.Media{}, errors.Errorf("size %dMb is too large", r.Size>>20)
 }
 
