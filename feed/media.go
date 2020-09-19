@@ -153,7 +153,7 @@ func (r *MediaRef) Handle(resp *http.Response) error {
 }
 
 func (r *MediaRef) incrementMediaMethod(mimeType string, method string) {
-	r.Manager.Metrics.Counter("err", metrics.Labels{
+	r.Manager.Metrics.Counter("ok", metrics.Labels{
 		"feed_id", PrintID(r.FeedID),
 		"mime_type", mimeType,
 		"method", method,
