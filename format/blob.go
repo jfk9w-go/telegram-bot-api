@@ -18,7 +18,7 @@ type Blobs interface {
 }
 
 type FileBlobStorage struct {
-	Clock
+	flu.Clock
 	Directory     string
 	TTL           time.Duration
 	CleanInterval time.Duration
@@ -36,7 +36,7 @@ func (s *FileBlobStorage) Init() (*FileBlobStorage, error) {
 
 	s.files = make(map[flu.File]time.Time)
 	if s.Clock == nil {
-		s.Clock = ClockFunc(time.Now)
+		s.Clock = flu.DefaultClock
 	}
 
 	return s, nil
