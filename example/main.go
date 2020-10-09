@@ -12,7 +12,6 @@ import (
 	"github.com/jfk9w-go/flu"
 	fluhttp "github.com/jfk9w-go/flu/http"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
-	"github.com/jfk9w-go/telegram-bot-api/feed"
 	"github.com/jfk9w-go/telegram-bot-api/format"
 	"github.com/pkg/errors"
 )
@@ -32,7 +31,6 @@ Sagittis aliquam malesuada bibendum arcu vitae elementum curabitur. Vitae auctor
 
 type CommandListener struct {
 	flu.RateLimiter
-	*feed.CommandListener
 }
 
 func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd telegram.Command) (err error) {
@@ -40,14 +38,6 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 		return err
 	}
 	defer l.Complete()
-
-	if err := l.CommandListener.OnCommand(ctx, bot, cmd); err != nil {
-		if err.Error() != "invalid command" {
-			return err
-		}
-	} else {
-		return nil
-	}
 
 	switch cmd.Key {
 	case "/greet":
@@ -163,33 +153,6 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 	return nil
 }
 
-type Vendor struct{}
-
-func (v Vendor) Parse(_ context.Context, ref string, options []string) (feed.Candidate, error) {
-	return feed.Candidate{
-		ID:   ref,
-		Name: ref,
-		Data: nil,
-	}, nil
-}
-
-func (v Vendor) Load(ctx context.Context, data feed.Data, queue feed.Queue) {
-	defer queue.Close()
-	var value int
-	if err := data.ReadTo(&value); err != nil {
-		_ = queue.Submit(ctx, feed.Update{Error: err})
-		return
-	}
-
-	_ = queue.Submit(ctx, feed.Update{
-		Write: func(html *format.HTMLWriter) error {
-			html.Bold("KEK").Text(fmt.Sprintf("\n%d", value))
-			return nil
-		},
-		Data: value + 1,
-	})
-}
-
 // This is an example bot which has three commands:
 //   /greet - reply with "Hello, %username%"
 //   /count n - count from 1 till n
@@ -200,34 +163,12 @@ func (v Vendor) Load(ctx context.Context, data feed.Data, queue feed.Queue) {
 //   cd example/ && go run main.go <token>
 // where <token> is your Telegram Bot API token.
 func main() {
-	store, err := feed.NewSQLite3(nil, ":memory:")
-	if err != nil {
-		panic(err)
-	}
-
-	executor := feed.NewTaskExecutor()
-	defer executor.Close()
-
 	bot := telegram.NewBot(fluhttp.NewTransport().
 		ResponseHeaderTimeout(2*time.Minute).
 		NewClient(), os.Args[1])
-	listener, err := (&feed.CommandListener{
-		Aggregator: (&feed.Aggregator{
-			Executor:          executor,
-			Feeds:             store,
-			HTMLWriterFactory: feed.TelegramHTML{Sender: bot},
-			UpdateInterval:    5 * time.Second,
-		}).Vendor("test_vendor", Vendor{}),
-		Management: feed.NewSupervisorManagement(bot, 50613409),
-	}).Init(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	defer listener.Close()
 
 	defer bot.CommandListener(CommandListener{
-		RateLimiter:     flu.ConcurrencyRateLimiter(2),
-		CommandListener: listener,
+		RateLimiter: flu.ConcurrencyRateLimiter(2),
 	}).Close()
 
 	flu.AwaitSignal(syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
