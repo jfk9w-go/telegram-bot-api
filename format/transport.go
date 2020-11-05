@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ErrIgnoredMedia = errors.New("ignored media")
+var ErrSkipMedia = errors.New("skip")
 
 type Transport interface {
 	Text(ctx context.Context, text string, preview bool) error
@@ -71,7 +71,7 @@ func (t *TelegramTransport) send(ctx context.Context, chatIDs []telegram.ChatID,
 			if t.Strict {
 				return errors.Wrapf(err, "send text to %s", chatID)
 			} else {
-				log.Printf("Failed to send entity (below) to %s: %s\n%s", chatID, err, sendable)
+				log.Printf("[chat > %s] unable to send message due to %s:\n%s", chatID, err, sendable)
 			}
 		}
 	}
@@ -92,7 +92,8 @@ func (t *TelegramTransport) Text(ctx context.Context, text string, preview bool)
 }
 
 func (t *TelegramTransport) Media(ctx context.Context, media Media, mediaErr error, caption string) error {
-	if mediaErr == ErrIgnoredMedia {
+	if errors.Is(mediaErr, ErrSkipMedia) {
+		log.Printf("[chat > %+v] skipping media: %s", t.ChatIDs, mediaErr)
 		return nil
 	}
 
@@ -132,7 +133,7 @@ func (t *TelegramTransport) Media(ctx context.Context, media Media, mediaErr err
 		}
 	}
 
-	log.Printf("[chat > %s] failed to send media message: %s\n%s", t.ChatIDs[0], mediaErr, caption)
+	log.Printf("[chat > %+v] unable to send media: %s\n%s", t.ChatIDs, mediaErr, caption)
 	return t.Text(ctx, caption, true)
 }
 
