@@ -122,7 +122,7 @@ func (m Media) kind() string {
 func (m Media) body(form *fluhttp.Form) (flu.EncoderTo, error) {
 	switch r := m.Input.(type) {
 	case flu.URL:
-		return form.Set(string(m.Type), r.URL()), nil
+		return form.Set(string(m.Type), r.Unmask()), nil
 	default:
 		return form.Multipart().File(string(m.Type), m.filename(), m.Input), nil
 	}
@@ -151,7 +151,7 @@ func (mg MediaGroup) body(form *fluhttp.Form) (flu.EncoderTo, error) {
 		m := mediaJSON{m, ""}
 		switch r := m.Input.(type) {
 		case flu.URL:
-			m.MediaURL = r.URL()
+			m.MediaURL = r.Unmask()
 		default:
 			if !multiparted {
 				multipart = form.Multipart()

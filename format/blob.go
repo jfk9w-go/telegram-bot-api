@@ -11,7 +11,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Blob = flu.InputOutput
+type Blob interface {
+	flu.Input
+	flu.Output
+}
 
 type Blobs interface {
 	Alloc() (Blob, error)
