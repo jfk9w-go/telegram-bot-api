@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/jfk9w-go/flu"
 	fluhttp "github.com/jfk9w-go/flu/http"
@@ -86,7 +87,9 @@ func (bot *Bot) runUpdateListener(ctx context.Context, cancel func(), options Ge
 		if ctx.Err() != nil {
 			return
 		} else if err != nil {
-			log.Printf("%s poll error: %s", bot.Username(), err)
+			logrus.WithFields(logrus.Fields{
+				"bot": bot.Username(),
+			}).Errorf("poll failed: %s", err)
 			select {
 			case <-ctx.Done():
 				return
@@ -156,7 +159,9 @@ type CommandListener interface {
 
 func (bot *Bot) CommandListener(listener CommandListener) *Bot {
 	commands := bot.Commands()
-	log.Printf("%s is running", bot.Username())
+	logrus.WithFields(logrus.Fields{
+		"bot": bot.Username(),
+	}).Debug("running")
 	bot.work.Add(1)
 	go bot.runCommandListener(commands, listener)
 	return bot
@@ -177,18 +182,19 @@ func (bot *Bot) handleCommand(ctx context.Context, cancel func(), listener Comma
 		bot.work.Done()
 	}()
 
+	log := cmd.Log(bot)
+
 	err := listener.OnCommand(ctx, bot, cmd)
 	if ctx.Err() != nil {
-		log.Printf(`%s => %s`, cmd, ctx.Err())
+		log.Debug(ctx.Err())
 		return
 	} else if err != nil {
-		log.Printf(`%s => %s`, cmd, err)
+		log.Debug(err)
 		if sendErr := cmd.Reply(ctx, bot, err.Error()); sendErr != nil {
-			log.Printf(`%s unable to send error reply "%s" to %s: %s`,
-				bot.Username(), err.Error(), cmd.Chat.ID, sendErr.Error())
+			log.Errorf("send error reply: %s", sendErr)
 		}
 	} else {
-		log.Printf(`%s => ok`, cmd)
+		log.Debug("ok")
 	}
 }
 
@@ -219,7 +225,7 @@ func (bot *Bot) extractCommand(update Update) (cmd Command, ok bool) {
 		reader.TrimLeadingSpace = true
 		args, err := reader.Read()
 		if err != nil {
-			log.Printf("%s => failed to parse args: %s", cmd, err)
+			cmd.Log(bot).Debugf("failed to parse args: %s", err)
 		} else {
 			cmd.Args = args
 		}
@@ -291,6 +297,16 @@ func (cmd Command) Reply(ctx context.Context, client Client, text string) error 
 		_, err := client.Send(ctx, cmd.Chat.ID, Text{Text: text}, &SendOptions{ReplyToMessageID: cmd.Message.ID})
 		return err
 	}
+}
+
+func (cmd Command) Log(bot Client) *logrus.Entry {
+	return logrus.WithFields(logrus.Fields{
+		"bot":     bot.Username(),
+		"chat":    cmd.Chat.ID,
+		"user":    cmd.User.ID,
+		"command": cmd.Key,
+		"payload": cmd.Payload,
+	})
 }
 
 type Button [3]string

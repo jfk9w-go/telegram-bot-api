@@ -2,7 +2,8 @@ package format
 
 import (
 	"context"
-	"log"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/jfk9w-go/flu"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
@@ -71,7 +72,9 @@ func (t *TelegramTransport) send(ctx context.Context, chatIDs []telegram.ChatID,
 			if t.Strict {
 				return errors.Wrapf(err, "send text to %s", chatID)
 			} else {
-				log.Printf("[chat > %s] unable to send message due to %s:\n%s", chatID, err, sendable)
+				logrus.WithFields(logrus.Fields{
+					"chat": chatID,
+				}).Warnf("failed to send message: %s", err)
 			}
 		}
 	}
@@ -93,7 +96,6 @@ func (t *TelegramTransport) Text(ctx context.Context, text string, preview bool)
 
 func (t *TelegramTransport) Media(ctx context.Context, media Media, mediaErr error, caption string) error {
 	if errors.Is(mediaErr, ErrSkipMedia) {
-		log.Printf("[chat > %+v] skipping media: %s", t.ChatIDs, mediaErr)
 		return nil
 	}
 
@@ -133,7 +135,10 @@ func (t *TelegramTransport) Media(ctx context.Context, media Media, mediaErr err
 		}
 	}
 
-	log.Printf("[chat > %+v] unable to send media: %s\n%s", t.ChatIDs, mediaErr, caption)
+	logrus.WithFields(logrus.Fields{
+		"chats":   t.ChatIDs,
+		"caption": caption,
+	}).Warnf("failed to send media: %s", mediaErr)
 	return t.Text(ctx, caption, true)
 }
 

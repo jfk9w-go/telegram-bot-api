@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/jfk9w-go/flu"
 	fluhttp "github.com/jfk9w-go/flu/http"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
@@ -163,6 +165,8 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 //   cd example/ && go run main.go <token>
 // where <token> is your Telegram Bot API token.
 func main() {
+	logrus.SetLevel(logrus.DebugLevel)
+
 	bot := telegram.NewBot(fluhttp.NewTransport().
 		ResponseHeaderTimeout(2*time.Minute).
 		NewClient(), os.Args[1])

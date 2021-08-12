@@ -1,11 +1,12 @@
 package format
 
 import (
-	"log"
 	"math/rand"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/jfk9w-go/flu"
 	"github.com/pkg/errors"
@@ -69,7 +70,9 @@ func (s *FileBlobStorage) Alloc() (Blob, error) {
 		for file, createdAt := range s.files {
 			if now.Sub(createdAt) > s.TTL {
 				if err := os.RemoveAll(file.Path()); err != nil {
-					log.Printf("[blobs] failed to remove %s: %s", file, err)
+					logrus.WithFields(logrus.Fields{
+						"file": file,
+					}).Warnf("failed to remove blob file: %s", err)
 					continue
 				}
 
@@ -79,7 +82,7 @@ func (s *FileBlobStorage) Alloc() (Blob, error) {
 		}
 
 		s.lastCleanTime = now
-		log.Printf("[blobs] deleted %d files", count)
+		logrus.Debugf("removed %s blob files", count)
 	}
 
 	return file, nil

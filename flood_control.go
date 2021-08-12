@@ -2,9 +2,10 @@ package telegram
 
 import (
 	"context"
-	"log"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/jfk9w-go/flu"
 	"github.com/pkg/errors"
@@ -65,7 +66,7 @@ func (c *FloodControlAware) send(ctx context.Context, chatID ChatID, item sendab
 				return errUnknownRecipient
 			}
 		case TooManyMessages:
-			log.Printf("Too many messages, sleeping for %s...", err.RetryAfter)
+			logrus.Warnf("too many messages, sleeping for %s...", err.RetryAfter)
 			timeout = err.RetryAfter
 		case Error:
 			return err
