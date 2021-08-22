@@ -1,20 +1,19 @@
-package format
+package richtext
 
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/jfk9w-go/flu"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var ErrSkipMedia = errors.New("skip")
 
-type Transport interface {
+type Output interface {
 	Text(ctx context.Context, text string, preview bool) error
-	Media(ctx context.Context, media Media, mediaErr error, text string) error
+	Media(ctx context.Context, media *Media, mediaErr error, text string) error
 }
 
 const (
@@ -57,24 +56,23 @@ func getReplyMarkup(ctx context.Context) telegram.ReplyMarkup {
 	}
 }
 
-type TelegramTransport struct {
+type TelegramOutput struct {
 	Sender  telegram.Sender
 	ChatIDs []telegram.ChatID
 	Strict  bool
 }
 
-func (t *TelegramTransport) send(ctx context.Context, chatIDs []telegram.ChatID, sendable telegram.Sendable) error {
+func (o *TelegramOutput) send(ctx context.Context, chatIDs []telegram.ChatID, sendable telegram.Sendable) error {
 	options := &telegram.SendOptions{
 		DisableNotification: !getNotify(ctx),
 		ReplyMarkup:         getReplyMarkup(ctx)}
 	for _, chatID := range chatIDs {
-		if _, err := t.Sender.Send(ctx, chatID, sendable, options); err != nil {
-			if t.Strict {
+		if _, err := o.Sender.Send(ctx, chatID, sendable, options); err != nil {
+			if o.Strict {
 				return errors.Wrapf(err, "send text to %s", chatID)
 			} else {
-				logrus.WithFields(logrus.Fields{
-					"chat": chatID,
-				}).Warnf("failed to send message: %s", err)
+				logrus.WithField("chat", chatID).
+					Warnf("failed to send message: %s", err)
 			}
 		}
 	}
@@ -82,26 +80,26 @@ func (t *TelegramTransport) send(ctx context.Context, chatIDs []telegram.ChatID,
 	return nil
 }
 
-func (t *TelegramTransport) Text(ctx context.Context, text string, preview bool) error {
+func (o *TelegramOutput) Text(ctx context.Context, text string, preview bool) error {
 	if text == "" {
 		return nil
 	}
 
-	return t.send(ctx, t.ChatIDs, telegram.Text{
+	return o.send(ctx, o.ChatIDs, telegram.Text{
 		Text:                  text,
 		ParseMode:             getParseMode(ctx),
 		DisableWebPagePreview: !preview,
 	})
 }
 
-func (t *TelegramTransport) Media(ctx context.Context, media Media, mediaErr error, caption string) error {
+func (o *TelegramOutput) Media(ctx context.Context, media *Media, mediaErr error, caption string) error {
 	if errors.Is(mediaErr, ErrSkipMedia) {
 		return nil
 	}
 
 	if mediaErr == nil {
-		chatID := t.ChatIDs[0]
-		if message, err := t.Sender.Send(ctx, chatID,
+		chatID := o.ChatIDs[0]
+		if message, err := o.Sender.Send(ctx, chatID,
 			telegram.Media{
 				ParseMode: getParseMode(ctx),
 				Caption:   caption,
@@ -126,7 +124,7 @@ func (t *TelegramTransport) Media(ctx context.Context, media Media, mediaErr err
 			if file == nil {
 				mediaErr = errors.New("unsupported media type")
 			} else {
-				return t.send(ctx, t.ChatIDs[1:], telegram.Media{
+				return o.send(ctx, o.ChatIDs[1:], telegram.Media{
 					ParseMode: getParseMode(ctx),
 					Caption:   caption,
 					Input:     flu.URL(file.ID),
@@ -135,31 +133,29 @@ func (t *TelegramTransport) Media(ctx context.Context, media Media, mediaErr err
 		}
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"chats":   t.ChatIDs,
-		"caption": caption,
-	}).Warnf("failed to send media: %s", mediaErr)
-	return t.Text(ctx, caption, true)
+	logrus.WithField("chats", o.ChatIDs).
+		Warnf("failed to send media: %s", mediaErr)
+	return o.Text(ctx, caption, true)
 }
 
-type BufferTransport struct {
+type BufferedOutput struct {
 	Pages []string
 }
 
-func NewBufferTransport() *BufferTransport {
-	return &BufferTransport{
+func NewBufferedOutput() *BufferedOutput {
+	return &BufferedOutput{
 		Pages: make([]string, 0),
 	}
 }
 
-func (b *BufferTransport) Text(ctx context.Context, text string, preview bool) error {
-	b.Pages = append(b.Pages, text)
+func (o *BufferedOutput) Text(ctx context.Context, text string, preview bool) error {
+	o.Pages = append(o.Pages, text)
 	return nil
 }
 
-func (b *BufferTransport) Media(ctx context.Context, media Media, mediaErr error, text string) error {
+func (o *BufferedOutput) Media(ctx context.Context, media *Media, mediaErr error, text string) error {
 	if text != "" {
-		return b.Text(ctx, text, false)
+		return o.Text(ctx, text, false)
 	}
 
 	return nil

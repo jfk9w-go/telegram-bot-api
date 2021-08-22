@@ -1,27 +1,27 @@
-package format_test
+package richtext_test
 
 import (
 	"testing"
 
-	"github.com/jfk9w-go/telegram-bot-api/format"
+	"github.com/jfk9w-go/telegram-bot-api/ext/richtext"
 	"github.com/stretchr/testify/assert"
 )
 
-type htmlAnchorFormatFunc func(text string, attrs format.HTMLAttributes) string
+type htmlAnchorFormatFunc func(text string, attrs richtext.HTMLAttributes) string
 
-func (f htmlAnchorFormatFunc) Format(text string, attrs format.HTMLAttributes) string {
+func (f htmlAnchorFormatFunc) Format(text string, attrs richtext.HTMLAttributes) string {
 	return f(text, attrs)
 }
 
 func TestHTMLWriter_Builder(t *testing.T) {
-	transport := newTestTransport()
-	writer := &format.HTMLWriter{
-		Session: &format.Session{
-			Transport: transport,
+	output := richtext.NewBufferedOutput()
+	writer := &richtext.HTMLWriter{
+		Session: &richtext.Message{
+			Transport: output,
 			PageSize:  72,
 		},
-		TagConverter: format.DefaultHTMLTagConverter,
-		AnchorFormat: format.DefaultHTMLAnchorFormat,
+		TagConverter: richtext.DefaultHTMLTagConverter,
+		AnchorFormat: richtext.DefaultHTMLAnchorFormat,
 	}
 
 	err := writer.
@@ -35,18 +35,18 @@ func TestHTMLWriter_Builder(t *testing.T) {
 		`<b>A Study in Scarlet is an 1887 detective novel by Scottish author</b>`,
 		`<b>Arthur Conan Doyle.</b>`,
 		`<a href="https://en.wikipedia.org/wiki/A_Study_in_Scarlet">Wikipedia</a>`,
-	}, transport.pages)
+	}, output.Pages)
 }
 
 func TestHTMLWriter_Markup(t *testing.T) {
-	transport := newTestTransport()
-	writer := &format.HTMLWriter{
-		Session: &format.Session{
-			Transport: transport,
+	output := richtext.NewBufferedOutput()
+	writer := &richtext.HTMLWriter{
+		Session: &richtext.Message{
+			Transport: output,
 			PageSize:  45,
 		},
-		TagConverter: format.DefaultHTMLTagConverter,
-		AnchorFormat: htmlAnchorFormatFunc(func(text string, _ format.HTMLAttributes) string { return text }),
+		TagConverter: richtext.DefaultHTMLTagConverter,
+		AnchorFormat: htmlAnchorFormatFunc(func(text string, _ richtext.HTMLAttributes) string { return text }),
 	}
 
 	var markup = `<strong>Музыкальный webm mp4 тред</strong><br><em>Не нашел - создал</em><br>Делимся вкусами, ищем музыку, создаем, нарезаем, постим свои либо чужие музыкальные видео.<br>Рекомендации для самостоятельного поиска соусов: <b><a href="https:&#47;&#47;pastebin.com&#47;i32h11vd" target="_blank" rel="nofollow noopener noreferrer"><i>https:&#47;&#47;pastebin.com&#47;i32h11vd</i></a></b>`
@@ -58,18 +58,18 @@ func TestHTMLWriter_Markup(t *testing.T) {
 		"чужие музыкальные видео.\nРекомендации для",
 		"самостоятельного поиска соусов: <b></b>",
 		"<b><i>https://pastebin.com/i32h11vd</i></b>",
-	}, transport.pages)
+	}, output.Pages)
 }
 
 func TestHTMLWriter_Markup_Autofix(t *testing.T) {
-	transport := newTestTransport()
-	writer := &format.HTMLWriter{
-		Session: &format.Session{
-			Transport: transport,
+	output := richtext.NewBufferedOutput()
+	writer := &richtext.HTMLWriter{
+		Session: &richtext.Message{
+			Transport: output,
 			PageSize:  45,
 		},
-		TagConverter: format.DefaultHTMLTagConverter,
-		AnchorFormat: htmlAnchorFormatFunc(func(text string, _ format.HTMLAttributes) string { return text }),
+		TagConverter: richtext.DefaultHTMLTagConverter,
+		AnchorFormat: htmlAnchorFormatFunc(func(text string, _ richtext.HTMLAttributes) string { return text }),
 	}
 
 	var markup = `<strong>Музыкальный webm mp4 тред</strong><br><em>Не нашел - создал<br>Делимся вкусами, ищем музыку, создаем, нарезаем, постим свои либо чужие музыкальные видео.<br>Рекомендации для самостоятельного поиска соусов: <a href="https:&#47;&#47;pastebin.com&#47;i32h11vd" target="_blank" rel="nofollow noopener noreferrer">https:&#47;&#47;pastebin.com&#47;i32h11vd</a></b>`
@@ -81,5 +81,5 @@ func TestHTMLWriter_Markup_Autofix(t *testing.T) {
 		"<i>либо чужие музыкальные видео.\nРекоменд</i>",
 		"<i>ации для самостоятельного поиска</i>",
 		"<i>соусов: https://pastebin.com/i32h11vd</i>",
-	}, transport.pages)
+	}, output.Pages)
 }

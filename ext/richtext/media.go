@@ -1,4 +1,4 @@
-package format
+package richtext
 
 import (
 	"context"
@@ -13,11 +13,11 @@ type Media struct {
 }
 
 type MediaRef interface {
-	Get(context.Context) (Media, error)
+	Get(context.Context) (*Media, error)
 }
 
 type mediaVarItem struct {
-	media Media
+	media *Media
 	err   error
 }
 
@@ -39,14 +39,14 @@ func MediaVarFrom(ctx context.Context, ref MediaRef) MediaVar {
 	return v
 }
 
-func (v MediaVar) Set(media Media, err error) {
+func (v MediaVar) Set(media *Media, err error) {
 	v <- mediaVarItem{media, err}
 }
 
-func (v MediaVar) Get(ctx context.Context) (Media, error) {
+func (v MediaVar) Get(ctx context.Context) (*Media, error) {
 	select {
 	case <-ctx.Done():
-		return Media{}, ctx.Err()
+		return nil, ctx.Err()
 	case item := <-v:
 		v <- item
 		return item.media, item.err

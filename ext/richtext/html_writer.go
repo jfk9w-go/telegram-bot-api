@@ -1,4 +1,4 @@
-package format
+package richtext
 
 import (
 	"context"
@@ -82,7 +82,7 @@ func HTMLAnchor(text, href string) string {
 }
 
 type HTMLWriter struct {
-	Session      *Session
+	Session      *Message
 	TagConverter HTMLTagConverter
 	AnchorFormat HTMLAnchorFormat
 	currTag      *HTMLTag
@@ -96,9 +96,9 @@ var (
 	DefaultMaxCaptionSize = telegram.MaxCaptionSize - DefaultLinkAllocSize
 )
 
-func HTMLWithTransport(ctx context.Context, transport Transport) *HTMLWriter {
+func HTMLWithTransport(ctx context.Context, transport Output) *HTMLWriter {
 	return &HTMLWriter{
-		Session: &Session{
+		Session: &Message{
 			Context:   ctx,
 			Transport: transport,
 			PageSize:  DefaultMaxMessageSize,
@@ -115,7 +115,7 @@ func HTML(ctx context.Context, sender telegram.Sender, notify bool, chatIDs ...t
 
 	return HTMLWithTransport(
 		WithParseMode(ctx, telegram.HTML),
-		&TelegramTransport{
+		&TelegramOutput{
 			Sender:  sender,
 			ChatIDs: chatIDs,
 			Strict:  true,
