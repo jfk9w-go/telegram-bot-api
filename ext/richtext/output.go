@@ -5,6 +5,7 @@ import (
 
 	"github.com/jfk9w-go/flu"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
+	"github.com/jfk9w-go/telegram-bot-api/ext/media"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -13,7 +14,7 @@ var ErrSkipMedia = errors.New("skip")
 
 type Output interface {
 	Text(ctx context.Context, text string, preview bool) error
-	Media(ctx context.Context, media *Media, mediaErr error, text string) error
+	Media(ctx context.Context, media *media.Value, mediaErr error, text string) error
 }
 
 const (
@@ -92,7 +93,7 @@ func (o *TelegramOutput) Text(ctx context.Context, text string, preview bool) er
 	})
 }
 
-func (o *TelegramOutput) Media(ctx context.Context, media *Media, mediaErr error, caption string) error {
+func (o *TelegramOutput) Media(ctx context.Context, media *media.Value, mediaErr error, caption string) error {
 	if errors.Is(mediaErr, ErrSkipMedia) {
 		return nil
 	}
@@ -133,8 +134,7 @@ func (o *TelegramOutput) Media(ctx context.Context, media *Media, mediaErr error
 		}
 	}
 
-	logrus.WithField("chats", o.ChatIDs).
-		Warnf("failed to send media: %s", mediaErr)
+	logrus.WithField("chats", o.ChatIDs).Warnf("send media: %s", mediaErr)
 	return o.Text(ctx, caption, true)
 }
 
@@ -153,7 +153,7 @@ func (o *BufferedOutput) Text(ctx context.Context, text string, preview bool) er
 	return nil
 }
 
-func (o *BufferedOutput) Media(ctx context.Context, media *Media, mediaErr error, text string) error {
+func (o *BufferedOutput) Media(ctx context.Context, media *media.Value, mediaErr error, text string) error {
 	if text != "" {
 		return o.Text(ctx, text, false)
 	}

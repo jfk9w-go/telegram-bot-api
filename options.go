@@ -11,11 +11,11 @@ import (
 )
 
 // GatewaySendDelay is a delay between two consecutive /send* API calls per bot token.
-var GatewaySendDelay = 30 * time.Millisecond
+var GatewaySendDelay = 35 * time.Millisecond
 
 // SendDelays are delays between two consecutive /send* API calls per chat with a given type.
 var SendDelays = map[ChatType]time.Duration{
-	PrivateChat: 30 * time.Millisecond,
+	PrivateChat: 35 * time.Millisecond,
 	GroupChat:   3 * time.Second,
 	Supergroup:  time.Second,
 	Channel:     3 * time.Second,

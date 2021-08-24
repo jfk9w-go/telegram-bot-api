@@ -9,10 +9,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jfk9w-go/telegram-bot-api/ext/output"
+	"github.com/jfk9w-go/telegram-bot-api/ext/receiver"
+
 	"github.com/jfk9w-go/flu"
 	fluhttp "github.com/jfk9w-go/flu/http"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
-	"github.com/jfk9w-go/telegram-bot-api/ext/richtext"
+	"github.com/jfk9w-go/telegram-bot-api/ext/html"
+	"github.com/jfk9w-go/telegram-bot-api/ext/media"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -49,30 +53,48 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 			&telegram.SendOptions{ReplyToMessageID: cmd.Message.ID})
 	case "/tick":
 		url := "https://thumbs.dreamstime.com/z/black-check-mark-icon-tick-symbol-tick-icon-vector-illustration-flat-ok-sticker-icon-isolated-white-accept-black-check-mark-137505360.jpg"
-		media := richtext.NewMediaVar()
-		media.Set(&richtext.Media{
+		mvar := media.NewVar()
+		mvar.Set(&media.Value{
 			MIMEType: "image/jpeg",
 			Input:    flu.URL(url),
 		}, nil)
-		err = richtext.HTML(ctx, bot, true, cmd.Chat.ID).
+
+		err = (&html.Writer{
+			Context: ctx,
+			Out: &output.Paged{
+				Receiver: &receiver.Chat{
+					Sender: bot,
+					ID:     cmd.Chat.ID,
+				},
+			},
+		}).
 			Text("Here's a ").
 			Bold("tick").
 			Italic(" for ya!").
-			Media(url, media, true).
+			Media(url, mvar, true).
 			Flush()
 
 	case "/lorem":
 		url := "https://thumbs.dreamstime.com/z/black-check-mark-icon-tick-symbol-tick-icon-vector-illustration-flat-ok-sticker-icon-isolated-white-accept-black-check-mark-137505360.jpg"
-		media := richtext.NewMediaVar()
-		media.Set(&richtext.Media{
+		mvar := media.NewVar()
+		mvar.Set(&media.Value{
 			MIMEType: "image/jpeg",
 			Input:    flu.File("tick.jpg"),
 		}, nil)
-		err = richtext.HTML(ctx, bot, false, cmd.Chat.ID).
+
+		err = (&html.Writer{
+			Context: ctx,
+			Out: &output.Paged{
+				Receiver: &receiver.Chat{
+					Sender: bot,
+					ID:     cmd.Chat.ID,
+				},
+			},
+		}).
 			Text(LoremIpsum).
-			Media(url, media, false).
-			Media(url, media, false).
-			Media(url, media, false).
+			Media(url, mvar, false).
+			Media(url, mvar, false).
+			Media(url, mvar, false).
 			Flush()
 
 	case "/gif":

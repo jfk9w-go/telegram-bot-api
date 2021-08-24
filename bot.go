@@ -183,18 +183,16 @@ func (bot *Bot) handleCommand(ctx context.Context, cancel func(), listener Comma
 	}()
 
 	log := cmd.Log(bot)
-
 	err := listener.OnCommand(ctx, bot, cmd)
 	if ctx.Err() != nil {
-		log.Debug(ctx.Err())
 		return
 	} else if err != nil {
 		log.Debug(err)
-		if sendErr := cmd.Reply(ctx, bot, err.Error()); sendErr != nil {
-			log.Errorf("send error reply: %s", sendErr)
+		if err := cmd.Reply(ctx, bot, err.Error()); err != nil {
+			log.Errorf("command: reply (%s)", err)
 		}
 	} else {
-		log.Debug("ok")
+		log.Debug("command: ok")
 	}
 }
 
@@ -273,9 +271,10 @@ func (bot *Bot) extractCommandCallbackQuery(query *CallbackQuery) (cmd Command, 
 	return
 }
 
-func (bot *Bot) Close() {
+func (bot *Bot) Close() error {
 	bot.cancel()
 	bot.work.Wait()
+	return nil
 }
 
 // Command is a text bot command.

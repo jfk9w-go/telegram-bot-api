@@ -4,10 +4,10 @@ import (
 	"context"
 	"math"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	telegram "github.com/jfk9w-go/telegram-bot-api"
+	"github.com/jfk9w-go/telegram-bot-api/ext/media"
 	"golang.org/x/exp/utf8string"
 )
 
@@ -139,7 +139,7 @@ func (m *Message) Unbreakable(text string) error {
 	return nil
 }
 
-func (m *Message) Media(ref MediaRef, anchor string, collapsible bool) error {
+func (m *Message) Media(ref media.Ref, anchor string, collapsible bool) error {
 	if m.Overflow {
 		return nil
 	}
@@ -155,8 +155,6 @@ func (m *Message) Media(ref MediaRef, anchor string, collapsible bool) error {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(m.Context, 10*time.Minute)
-	media, mediaErr := ref.Get(ctx)
-	cancel()
+	media, mediaErr := ref.Get(m.Context)
 	return m.Transport.Media(m.Context, media, mediaErr, caption)
 }
