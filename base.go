@@ -50,7 +50,7 @@ func NewBaseClientWithEndpoint(client *fluhttp.Client, token string, endpoint En
 // See https://core.telegram.org/bots/api#getupdates
 func (c BaseClient) GetUpdates(ctx context.Context, options GetUpdatesOptions) ([]Update, error) {
 	updates := make([]Update, 0)
-	return updates, c.Execute(ctx, "getUpdates", flu.JSON{options}, &updates)
+	return updates, c.Execute(ctx, "getUpdates", flu.JSON{Value: options}, &updates)
 }
 
 // A simple method for testing your bot's auth token. Requires no parameters.

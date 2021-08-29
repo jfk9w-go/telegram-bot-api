@@ -10,7 +10,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/jfk9w-go/flu"
 	fluhttp "github.com/jfk9w-go/flu/http"
 )
 
@@ -32,10 +31,6 @@ type GetUpdatesOptions struct {
 	TimeoutSecs int `json:"timeout,omitempty"`
 	// List the types of updates you want your bot to receive.
 	AllowedUpdates []string `json:"allowed_updates,omitempty"`
-}
-
-func (o *GetUpdatesOptions) body() flu.EncoderTo {
-	return flu.JSON{o}
 }
 
 type Bot struct {

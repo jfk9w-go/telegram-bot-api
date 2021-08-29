@@ -173,7 +173,8 @@ func (l CommandListener) OnCommand(ctx context.Context, bot telegram.Client, cmd
 	default:
 		return errors.New("invalid command")
 	}
-	return nil
+
+	return err
 }
 
 // This is an example bot which has three commands:
@@ -192,9 +193,11 @@ func main() {
 		ResponseHeaderTimeout(2*time.Minute).
 		NewClient(), os.Args[1])
 
-	defer bot.CommandListener(CommandListener{
-		RateLimiter: flu.ConcurrencyRateLimiter(2),
-	}).Close()
+	defer flu.CloseQuietly(
+		bot.CommandListener(CommandListener{
+			RateLimiter: flu.ConcurrencyRateLimiter(2),
+		}),
+	)
 
 	flu.AwaitSignal(syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
 }
