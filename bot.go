@@ -211,6 +211,19 @@ func (bot *Bot) CommandListenerFunc(fun CommandListenerFunc) *Bot {
 
 type CommandRegistry map[string]CommandListener
 
+func (r CommandRegistry) Add(key string, listener CommandListener) CommandRegistry {
+	if _, ok := r[key]; ok {
+		logrus.Fatalf("duplicate command handler: %s", key)
+	}
+
+	r[key] = listener
+	return r
+}
+
+func (r CommandRegistry) AddFunc(key string, listener CommandListenerFunc) CommandRegistry {
+	return r.Add(key, listener)
+}
+
 func (r CommandRegistry) OnCommand(ctx context.Context, client Client, cmd *Command) error {
 	if listener, ok := r[cmd.Key]; ok {
 		return listener.OnCommand(ctx, client, cmd)

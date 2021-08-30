@@ -1,6 +1,6 @@
 # telegram-bot-api
 
-[![GoDoc](https://godoc.org/github.com/jfk9w-go/telegram-bot-api?status.svg)](https://godoc.org/github.com/jfk9w-go/telegram-bot-api) [![Build Status](https://travis-ci.com/jfk9w-go/telegram-bot-api.svg?branch=master)](https://travis-ci.com/jfk9w-go/telegram-bot-api) 
+[![GoDoc](https://godoc.org/github.com/jfk9w-go/telegram-bot-api?status.svg)](https://godoc.org/github.com/jfk9w-go/telegram-bot-api) [![ci](https://github.com/jfk9w-go/telegram-bot-api/actions/workflows/ci.yml/badge.svg)](https://github.com/jfk9w-go/telegram-bot-api/actions/workflows/ci.yml) 
 
 **telegram-bot-api** is a simple Telegram Bot API client and bot implementation.
 
@@ -20,25 +20,38 @@ go get -u github.com/jfk9w-go/telegram-bot-api
 ```
 
 ## Example
+
 ```go
 package main
 
 import (
+	"context"
 	"os"
-	
+
+	"github.com/jfk9w-go/flu"
 	"github.com/jfk9w-go/telegram-bot-api"
 )
 
 func main() {
-    // First read the token from command line arguments.
-    token := os.Args[1]
-    // Create a bot instance.
-    bot := telegram.NewBot(nil, token)
-    // Run command listeners.
-    bot.Listen(telegram.NewCommandUpdateListener().
-        AddFunc("/ping", func(c *telegram.Command) {
-            c.TextReply("pong")
-        }))
+	// read token from command line arguments
+	token := os.Args[1]
+	
+	// define a listener
+	listener := make(telegram.CommandRegistry).
+		AddFunc("/ping", func(ctx context.Context, client telegram.Client, cmd *telegram.Command) error {
+			return cmd.Reply(ctx, client, "pong")
+		})
+	
+	defer telegram.
+		// create bot instance
+		NewBot(context.Background(), nil, token).
+		// start command listener
+		CommandListener(listener).
+		// defer shutdown
+		Close()
+	
+	// wait for signal
+	flu.AwaitSignal()
 }
 ```
 
