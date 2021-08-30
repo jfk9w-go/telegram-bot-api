@@ -32,16 +32,18 @@ func newResponse(value interface{}) *response {
 }
 
 func (r *response) DecodeFrom(reader io.Reader) error {
-	err := flu.JSON{Value: r}.DecodeFrom(reader)
-	if err != nil {
+	if err := flu.JSON(r).DecodeFrom(reader); err != nil {
 		return err
 	}
+
 	if !r.Ok {
 		if r.Parameters != nil && r.Parameters.RetryAfter > 0 {
 			return TooManyMessages{time.Duration(r.Parameters.RetryAfter) * time.Second}
 		}
+
 		return Error{r.ErrorCode, r.Description}
 	}
+
 	return nil
 }
 

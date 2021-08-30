@@ -45,15 +45,15 @@ func NewBaseClientWithEndpoint(client *fluhttp.Client, token string, endpoint En
 	return func(method string) *fluhttp.Request { return client.POST(endpoint(token, method)) }
 }
 
-// Use this method to receive incoming updates using long polling.
+// GetUpdates is used to receive incoming updates using long polling.
 // An Array of Update objects is returned.
 // See https://core.telegram.org/bots/api#getupdates
 func (c BaseClient) GetUpdates(ctx context.Context, options GetUpdatesOptions) ([]Update, error) {
 	updates := make([]Update, 0)
-	return updates, c.Execute(ctx, "getUpdates", flu.JSON{Value: options}, &updates)
+	return updates, c.Execute(ctx, "getUpdates", flu.JSON(options), &updates)
 }
 
-// A simple method for testing your bot's auth token. Requires no parameters.
+// GetMe is a simple method for testing your bot's auth token. Requires no parameters.
 // Returns basic information about the bot in form of a User object.
 // See https://core.telegram.org/bots/api#getme
 func (c BaseClient) GetMe(ctx context.Context) (*User, error) {
@@ -61,7 +61,7 @@ func (c BaseClient) GetMe(ctx context.Context) (*User, error) {
 	return user, c.Execute(ctx, "getMe", nil, user)
 }
 
-// Use this method to delete a message, including service messages, with the following limitations:
+// DeleteMessage is used to delete a message, including service messages, with the following limitations:
 // - A message can only be deleted if it was sent less than 48 hours ago.
 // - Bots can delete outgoing messages in private chats, groups, and supergroups.
 // - Bots granted can_post_messages permissions can delete outgoing messages in channels.
@@ -85,7 +85,7 @@ func (c BaseClient) ExportChatInviteLink(ctx context.Context, chatID ChatID) (st
 	return inviteLink, c.Execute(ctx, "exportChatInviteLink", body, &inviteLink)
 }
 
-// Use this method to get up to date information about the chat (current name of
+// GetChat is used to get up to date information about the chat (current name of
 // the user for one-on-one conversations, current username of a user, group or updateChannel, etc.).
 // Returns a Chat object on success.
 // See https://core.telegram.org/bots/api#getchat
@@ -96,7 +96,7 @@ func (c BaseClient) GetChat(ctx context.Context, chatID ChatID) (*Chat, error) {
 	return chat, c.Execute(ctx, "getChat", body, chat)
 }
 
-// Use this method to get a list of administrators in a chat.
+// GetChatAdministrators is used to get a list of administrators in a chat.
 // On success, returns an Array of ChatMember objects that contains information about
 // all chat administrators except other bots. If the chat is a group or a supergroup and
 // no administrators were appointed, only the creator will be returned.
@@ -108,7 +108,7 @@ func (c BaseClient) GetChatAdministrators(ctx context.Context, chatID ChatID) ([
 	return members, c.Execute(ctx, "getChatAdministrators", body, &members)
 }
 
-// Use this method to get information about a member of a chat.
+// GetChatMember is used to get information about a member of a chat.
 // Returns a ChatMember object on success.
 // See https://core.telegram.org/bots/api#getchatmember
 func (c BaseClient) GetChatMember(ctx context.Context, chatID ChatID, userID ID) (*ChatMember, error) {
@@ -119,7 +119,7 @@ func (c BaseClient) GetChatMember(ctx context.Context, chatID ChatID, userID ID)
 	return member, c.Execute(ctx, "getChatMember", body, member)
 }
 
-// Use this method to send answers to callback queries sent from inline keyboards.
+// AnswerCallbackQuery is used to send answers to callback queries sent from inline keyboards.
 // The answer will be displayed to the user as a notification at the top of the chat screen or as an alert.
 // On success, True is returned.
 // https://core.telegram.org/bots/api#answercallbackquery

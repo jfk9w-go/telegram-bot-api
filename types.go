@@ -1,6 +1,8 @@
 package telegram
 
-// Format is a parse_mode request parameter type.
+import "time"
+
+// ParseMode is a parse_mode request parameter type.
 type ParseMode string
 
 const (
@@ -17,7 +19,7 @@ const (
 	MaxCaptionSize = 1024
 )
 
-// Type of chat, can be either “private”, “group”, “supergroup” or “channel”
+// ChatType can be either “private”, “group”, “supergroup” or “channel”
 type ChatType string
 
 const (
@@ -27,8 +29,12 @@ const (
 	Channel     ChatType = "channel"
 )
 
+func (t ChatType) SendDelay() time.Duration {
+	return SendDelays[t]
+}
+
 type (
-	// See https://core.telegram.org/bots/api#user
+	// User (https://core.telegram.org/bots/api#user)
 	User struct {
 		ID        ID        `json:"id"`
 		IsBot     bool      `json:"is_bot"`
@@ -37,7 +43,7 @@ type (
 		Username  *Username `json:"username"`
 	}
 
-	// See https://core.telegram.org/bots/api#chat
+	// Chat (https://core.telegram.org/bots/api#chat)
 	Chat struct {
 		ID                          ID        `json:"id"`
 		Type                        ChatType  `json:"type"`
@@ -53,7 +59,7 @@ type (
 		ID string `json:"file_id"`
 	}
 
-	// See https://core.telegram.org/bots/api#message
+	// Message (https://core.telegram.org/bots/api#message)
 	Message struct {
 		ID             ID              `json:"message_id"`
 		From           User            `json:"from"`
@@ -67,7 +73,7 @@ type (
 		Animation      *MessageFile    `json:"animation"`
 	}
 
-	// See https://core.telegram.org/bots/api#messageentity
+	// MessageEntity (https://core.telegram.org/bots/api#messageentity)
 	MessageEntity struct {
 		Type   string `json:"type"`
 		Offset int    `json:"offset"`
@@ -76,7 +82,7 @@ type (
 		User   *User  `json:"user"`
 	}
 
-	// See https://core.telegram.org/bots/api#update
+	// Update (https://core.telegram.org/bots/api#update)
 	Update struct {
 		ID                ID             `json:"update_id"`
 		Message           *Message       `json:"message"`
@@ -86,13 +92,13 @@ type (
 		CallbackQuery     *CallbackQuery `json:"callback_query"`
 	}
 
-	// See https://core.telegram.org/bots/api#chatmember
+	// ChatMember (https://core.telegram.org/bots/api#chatmember)
 	ChatMember struct {
 		User   User   `json:"user"`
 		Status string `json:"status"`
 	}
 
-	// https://core.telegram.org/bots/api#callbackquery
+	// CallbackQuery (https://core.telegram.org/bots/api#callbackquery)
 	CallbackQuery struct {
 		ID              string   `json:"id"`
 		From            User     `json:"from"`
@@ -103,7 +109,7 @@ type (
 		GameShortName   *string  `json:"game_short_name"`
 	}
 
-	// https://core.telegram.org/bots/api#inlinekeyboardbutton
+	// InlineKeyboardButton (https://core.telegram.org/bots/api#inlinekeyboardbutton)
 	InlineKeyboardButton struct {
 		Text                         string `json:"text"`
 		URL                          string `json:"url,omitempty"`
@@ -121,7 +127,7 @@ type (
 		Selective  bool `json:"selective,omitempty"`
 	}
 
-	// https://core.telegram.org/bots/api#inlinekeyboardmarkup
+	// InlineKeyboardMarkup (https://core.telegram.org/bots/api#inlinekeyboardmarkup)
 	InlineKeyboardMarkup struct {
 		InlineKeyboard [][]InlineKeyboardButton `json:"inline_keyboard"`
 	}

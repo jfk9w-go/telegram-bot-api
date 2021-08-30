@@ -161,7 +161,7 @@ func (w *Writer) MarkupString(markup string) *Writer {
 
 func (w *Writer) Media(url string, ref media.Ref, collapsible bool) *Writer {
 	if w.err != nil || w.Out.IsOverflown() {
-		return nil
+		return w
 	}
 	w.err = w.Out.AddMedia(w.Context, ref, Anchor("[media]", url), collapsible)
 	return w

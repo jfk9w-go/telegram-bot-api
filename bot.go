@@ -4,9 +4,17 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+
+	"github.com/pkg/errors"
+
+	"github.com/jfk9w-go/flu/metrics"
+
+	"github.com/jfk9w-go/flu"
 
 	"github.com/sirupsen/logrus"
 
@@ -40,19 +48,19 @@ type Bot struct {
 	ctx    context.Context
 	cancel func()
 	me     *User
-	work   sync.WaitGroup
+	work   flu.WaitGroup
 	once   sync.Once
 }
 
-func NewBot(client *fluhttp.Client, token string) *Bot {
-	return NewBotWithEndpoint(client, token, nil)
+func NewBot(ctx context.Context, client *fluhttp.Client, token string) *Bot {
+	return NewBotWithEndpoint(ctx, client, token, nil)
 }
 
-func NewBotWithEndpoint(client *fluhttp.Client, token string, endpoint EndpointFunc) *Bot {
+func NewBotWithEndpoint(ctx context.Context, client *fluhttp.Client, token string, endpoint EndpointFunc) *Bot {
 	base := NewBaseClientWithEndpoint(client, token, endpoint)
 	floodControl := FloodControl(base)
 	conversations := Conversations(floodControl)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	return &Bot{
 		BaseClient:        base,
 		FloodControlAware: floodControl,
@@ -62,51 +70,49 @@ func NewBotWithEndpoint(client *fluhttp.Client, token string, endpoint EndpointF
 	}
 }
 
-func (bot *Bot) Listen(options GetUpdatesOptions) <-chan Update {
-	channel := make(chan Update)
-	ctx, cancel := context.WithCancel(bot.ctx)
-	bot.work.Add(1)
-	go bot.runUpdateListener(ctx, cancel, options, channel)
-	return channel
+func (bot *Bot) Labels() metrics.Labels {
+	return metrics.Labels{}.Add("bot", bot.Username())
 }
 
-func (bot *Bot) runUpdateListener(ctx context.Context, cancel func(), options GetUpdatesOptions, channel chan<- Update) {
-	defer func() {
-		close(channel)
-		cancel()
-		bot.work.Done()
-	}()
+func (bot *Bot) log() *logrus.Entry {
+	return logrus.WithFields(bot.Labels().Map())
+}
 
-	for {
-		updates, err := bot.GetUpdates(ctx, options)
-		if ctx.Err() != nil {
-			return
-		} else if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"bot": bot.Username(),
-			}).Errorf("poll failed: %s", err)
-			select {
-			case <-ctx.Done():
+func (bot *Bot) Listen(options GetUpdatesOptions) <-chan Update {
+	log := bot.log()
+	channel := make(chan Update)
+	bot.work.Go(bot.ctx, func(ctx context.Context) {
+		defer close(channel)
+		for {
+			updates, err := bot.GetUpdates(ctx, options)
+			switch {
+			case flu.IsContextRelated(err):
 				return
-			case <-time.After(time.Duration(options.TimeoutSecs) * time.Second):
-				continue
-			}
-		}
 
-		for _, update := range updates {
-			if update.Message != nil && bot.Answer(update.Message) {
-				// already answered
-			} else {
-				select {
-				case <-ctx.Done():
+			case err != nil:
+				log.Warnf("poll error: %s", err)
+				if err := flu.Sleep(ctx, time.Duration(options.TimeoutSecs)*time.Second); err != nil {
 					return
-				case channel <- update:
+				}
+
+			default:
+				for _, update := range updates {
+					if update.Message != nil && bot.Answer(update.Message) {
+						continue
+					}
+
+					select {
+					case <-ctx.Done():
+						return
+					case channel <- update:
+						options.Offset = update.ID.Increment()
+					}
 				}
 			}
-
-			options.Offset = update.ID.Increment()
 		}
-	}
+	})
+
+	return channel
 }
 
 func (bot *Bot) Username() string {
@@ -149,56 +155,120 @@ func (bot *Bot) pipeCommands(updates <-chan Update, commands chan<- Command) {
 }
 
 type CommandListener interface {
-	OnCommand(ctx context.Context, client Client, cmd Command) error
+	OnCommand(ctx context.Context, client Client, cmd *Command) error
 }
 
-func (bot *Bot) CommandListener(listener CommandListener) *Bot {
+func (bot *Bot) CommandListener(value interface{}) *Bot {
+	var listener CommandListener
+	switch value := value.(type) {
+	case CommandListener:
+		listener = value
+	default:
+		listener = CommandRegistryFrom(value)
+	}
+
 	commands := bot.Commands()
-	logrus.WithFields(logrus.Fields{
-		"bot": bot.Username(),
-	}).Debug("running")
-	bot.work.Add(1)
-	go bot.runCommandListener(commands, listener)
+	bot.work.Go(bot.ctx, func(ctx context.Context) {
+		for cmd := range commands {
+			if err := bot.HandleCommand(ctx, listener, &cmd); err != nil {
+				if flu.IsContextRelated(err) {
+					return
+				}
+
+				cmd.Log(bot).Warnf("handle command: %s", err)
+			} else {
+				cmd.Log(bot).Debugf("handle command: ok")
+			}
+		}
+	})
+
 	return bot
 }
 
-func (bot *Bot) runCommandListener(commands <-chan Command, listener CommandListener) {
-	defer bot.work.Done()
-	for cmd := range commands {
-		ctx, cancel := context.WithCancel(bot.ctx)
-		bot.work.Add(1)
-		go bot.handleCommand(ctx, cancel, listener, cmd)
-	}
-}
-
-func (bot *Bot) handleCommand(ctx context.Context, cancel func(), listener CommandListener, cmd Command) {
-	defer func() {
-		cancel()
-		bot.work.Done()
-	}()
-
-	log := cmd.Log(bot)
-	err := listener.OnCommand(ctx, bot, cmd)
-	if ctx.Err() != nil {
+func (bot *Bot) HandleCommand(ctx context.Context, listener CommandListener, cmd *Command) (err error) {
+	err = listener.OnCommand(ctx, bot, cmd)
+	switch {
+	case flu.IsContextRelated(err):
 		return
-	} else if err != nil {
-		log.Debug(err)
+	case err != nil:
 		if err := cmd.Reply(ctx, bot, err.Error()); err != nil {
-			log.Errorf("command: reply (%s)", err)
+			return errors.Wrap(err, "reply")
 		}
-	} else {
-		log.Debug("command: ok")
 	}
+
+	return
 }
 
-type CommandListenerFunc func(context.Context, Client, Command) error
+type CommandListenerFunc func(context.Context, Client, *Command) error
 
-func (fun CommandListenerFunc) OnCommand(ctx context.Context, client Client, cmd Command) error {
+func (fun CommandListenerFunc) OnCommand(ctx context.Context, client Client, cmd *Command) error {
 	return fun(ctx, client, cmd)
 }
 
 func (bot *Bot) CommandListenerFunc(fun CommandListenerFunc) *Bot {
 	return bot.CommandListener(fun)
+}
+
+type CommandRegistry map[string]CommandListener
+
+func (r CommandRegistry) OnCommand(ctx context.Context, client Client, cmd *Command) error {
+	if listener, ok := r[cmd.Key]; ok {
+		return listener.OnCommand(ctx, client, cmd)
+	}
+
+	return nil
+}
+
+func CommandRegistryFrom(value interface{}) CommandRegistry {
+	valueType := reflect.TypeOf(value)
+	elemType := valueType
+	if elemType.Kind() == reflect.Ptr {
+		elemType = elemType.Elem()
+	}
+
+	log := logrus.WithField("service", fmt.Sprintf("%T", value))
+	registry := make(CommandRegistry)
+	for i := 0; i < elemType.NumMethod(); i++ {
+		method := elemType.Method(i)
+		methodType := method.Type
+		if method.IsExported() && methodType.NumIn() == 4 && methodType.NumOut() == 1 &&
+			methodType.In(1).AssignableTo(reflect.TypeOf(new(context.Context)).Elem()) &&
+			methodType.In(2).AssignableTo(reflect.TypeOf(new(Client)).Elem()) &&
+			methodType.In(3).AssignableTo(reflect.TypeOf(new(Command))) &&
+			methodType.Out(0).AssignableTo(reflect.TypeOf(new(error)).Elem()) {
+
+			name := method.Name
+			runes := []rune(name)
+			runes[0] = unicode.ToLower(runes[0])
+			name = string(runes)
+			if strings.HasSuffix(name, "Callback") {
+				name = name[:len(name)-8]
+			} else {
+				name = "/" + name
+			}
+
+			handle := CommandListenerFunc(func(ctx context.Context, client Client, command *Command) error {
+				err := method.Func.Call([]reflect.Value{
+					reflect.ValueOf(value),
+					reflect.ValueOf(ctx),
+					reflect.ValueOf(client),
+					reflect.ValueOf(command),
+				})[0].Interface()
+				if err != nil {
+					return err.(error)
+				}
+
+				return nil
+			})
+
+			registry[name] = handle
+			log.WithField("command", name).
+				WithField("handler", method.Name).
+				Infof("command handler registered")
+		}
+	}
+
+	return registry
 }
 
 func (bot *Bot) extractCommand(update Update) (cmd Command, ok bool) {
@@ -283,7 +353,7 @@ type Command struct {
 	CallbackQueryID string
 }
 
-func (cmd Command) Reply(ctx context.Context, client Client, text string) error {
+func (cmd *Command) Reply(ctx context.Context, client Client, text string) error {
 	if cmd.CallbackQueryID != "" {
 		_, err := client.AnswerCallbackQuery(ctx, cmd.CallbackQueryID, AnswerCallbackQueryOptions{Text: text})
 		return err
@@ -293,19 +363,21 @@ func (cmd Command) Reply(ctx context.Context, client Client, text string) error 
 	}
 }
 
-func (cmd Command) Log(bot Client) *logrus.Entry {
-	return logrus.WithFields(logrus.Fields{
-		"bot":     bot.Username(),
-		"chat":    cmd.Chat.ID,
-		"user":    cmd.User.ID,
-		"command": cmd.Key,
-		"payload": cmd.Payload,
-	})
+func (cmd *Command) Labels() metrics.Labels {
+	return metrics.Labels{}.
+		Add("chat", cmd.Chat.ID).
+		Add("user", cmd.User.ID).
+		Add("command", cmd.Key).
+		Add("payload", cmd.Payload)
+}
+
+func (cmd *Command) Log(bot *Bot) *logrus.Entry {
+	return logrus.WithFields(bot.Labels().AddAll(cmd.Labels()).Map())
 }
 
 type Button [3]string
 
-func (cmd Command) Button(text string) Button {
+func (cmd *Command) Button(text string) Button {
 	b := new(strings.Builder)
 	writer := csv.NewWriter(b)
 	writer.Comma = ' '
@@ -317,7 +389,7 @@ func (cmd Command) Button(text string) Button {
 	return Button{text, cmd.Key, strings.Trim(b.String(), " \n")}
 }
 
-func (cmd Command) String() string {
+func (cmd *Command) String() string {
 	str := fmt.Sprintf("[cmd > %s+%s] %s", cmd.User.ID, cmd.Chat.ID, cmd.Key)
 	if cmd.Payload != "" {
 		str += " " + cmd.Payload

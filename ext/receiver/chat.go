@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/sirupsen/logrus"
-
-	"github.com/jfk9w-go/flu/metrics"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 	"github.com/jfk9w-go/telegram-bot-api/ext/media"
+	"github.com/sirupsen/logrus"
 )
 
 type Chat struct {
@@ -42,14 +40,10 @@ func (r *Chat) SendMedia(ctx context.Context, ref media.Ref, caption string) err
 		if err == nil {
 			return nil
 		}
+
+		logrus.WithField("chat", r.ID).Warnf("send media: %s", err)
 	}
 
-	labels := metrics.Labels{}
-	if labeled, ok := ref.(metrics.Labeled); ok {
-		labels = labels.AddAll(labeled.Labels())
-	}
-
-	logrus.WithFields(labels.Map()).Warnf("send media: %s", err)
 	return r.sendText(ctx, caption, true)
 }
 

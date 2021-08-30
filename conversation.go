@@ -16,7 +16,7 @@ type Sender interface {
 type ConversationAware struct {
 	sender    Sender
 	questions map[ID]Question
-	mutex     sync.RWMutex
+	mu        sync.RWMutex
 }
 
 func Conversations(sender Sender) *ConversationAware {
@@ -50,9 +50,9 @@ func (c *ConversationAware) Ask(ctx context.Context, chatID ChatID, sendable Sen
 
 func (c *ConversationAware) Answer(message *Message) bool {
 	if message.ReplyToMessage != nil {
-		c.mutex.RLock()
+		c.mu.RLock()
 		question, ok := c.questions[message.ReplyToMessage.ID]
-		c.mutex.RUnlock()
+		c.mu.RUnlock()
 		if ok {
 			question <- message
 			return true
@@ -64,14 +64,14 @@ func (c *ConversationAware) Answer(message *Message) bool {
 
 func (c *ConversationAware) addQuestion(id ID) Question {
 	question := make(Question)
-	c.mutex.Lock()
+	c.mu.Lock()
 	c.questions[id] = question
-	c.mutex.Unlock()
+	c.mu.Unlock()
 	return question
 }
 
 func (c *ConversationAware) removeQuestion(id ID) {
-	c.mutex.Lock()
+	c.mu.Lock()
 	delete(c.questions, id)
-	c.mutex.Unlock()
+	c.mu.Unlock()
 }

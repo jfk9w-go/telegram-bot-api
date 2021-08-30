@@ -11,6 +11,17 @@ import (
 	"github.com/pkg/errors"
 )
 
+// GatewaySendDelay is a delay between two consecutive /send* API calls per bot token.
+var GatewaySendDelay = 35 * time.Millisecond
+
+// SendDelays are delays between two consecutive /send* API calls per chat with a given type.
+var SendDelays = map[ChatType]time.Duration{
+	PrivateChat: 35 * time.Millisecond,
+	GroupChat:   3 * time.Second,
+	Supergroup:  time.Second,
+	Channel:     3 * time.Second,
+}
+
 var MaxSendRetries = 3
 
 type Executor interface {
@@ -21,7 +32,7 @@ type FloodControlAware struct {
 	executor    Executor
 	rateLimiter flu.RateLimiter
 	recipients  map[ChatID]flu.RateLimiter
-	flu.RWMutex
+	mu          flu.RWMutex
 }
 
 func FloodControl(executor Executor) *FloodControlAware {
@@ -41,10 +52,8 @@ func (c *FloodControlAware) send(ctx context.Context, chatID ChatID, item sendab
 	}
 
 	method := "send" + strings.Title(item.kind())
-	c.RLock()
-	limiter, exists := c.recipients[chatID]
-	c.RUnlock()
-	if exists {
+	limiter, ok := c.getRecipient(chatID)
+	if ok {
 		if err := limiter.Start(ctx); err != nil {
 			return err
 		}
@@ -60,7 +69,7 @@ func (c *FloodControlAware) send(ctx context.Context, chatID ChatID, item sendab
 		var timeout time.Duration
 		switch err := err.(type) {
 		case nil:
-			if exists {
+			if ok {
 				return nil
 			} else {
 				return errUnknownRecipient
@@ -74,23 +83,30 @@ func (c *FloodControlAware) send(ctx context.Context, chatID ChatID, item sendab
 			timeout = GatewaySendDelay
 		}
 
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(timeout):
+		if err := flu.Sleep(ctx, timeout); err != nil {
+			return err
 		}
 	}
+
 	return err
 }
 
+func (c *FloodControlAware) getRecipient(chatID ChatID) (flu.RateLimiter, bool) {
+	defer c.mu.RLock().Unlock()
+	limiter, ok := c.recipients[chatID]
+	return limiter, ok
+}
+
 func (c *FloodControlAware) newRecipient(chat *Chat) {
-	defer c.Lock().Unlock()
-	if _, ok := c.recipients[chat.ID]; !ok {
-		rateLimiter := flu.IntervalRateLimiter(SendDelays[chat.Type])
-		c.recipients[chat.ID] = rateLimiter
-		if chat.Username != nil {
-			c.recipients[*chat.Username] = rateLimiter
-		}
+	defer c.mu.Lock().Unlock()
+	if _, ok := c.recipients[chat.ID]; ok {
+		return
+	}
+
+	limiter := flu.IntervalRateLimiter(chat.Type.SendDelay())
+	c.recipients[chat.ID] = limiter
+	if chat.Username != nil {
+		c.recipients[*chat.Username] = limiter
 	}
 }
 
@@ -113,8 +129,8 @@ func (c *FloodControlAware) Send(ctx context.Context, chatID ChatID, item Sendab
 	return m, err
 }
 
-// Use this method to send a group of photos or videos as an album.
-// On success, an array of the workers Messages is returned.
+// SendMediaGroup is used to send a group of photos or videos as an album.
+// On success, an array of Message's is returned.
 // See https://core.telegram.org/bots/api#sendmediagroup
 func (c *FloodControlAware) SendMediaGroup(ctx context.Context, chatID ChatID, media []Media, options *SendOptions) ([]Message, error) {
 	ms := make([]Message, 0)
