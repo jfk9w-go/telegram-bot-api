@@ -2,9 +2,14 @@ package telegram
 
 import (
 	"context"
-	"sync"
 
+	"github.com/jfk9w-go/flu"
 	"github.com/pkg/errors"
+)
+
+var (
+	ErrNotAQuestion = errors.New("not a question")
+	ErrForgotten    = errors.New("forgotten")
 )
 
 type Question chan *Message
@@ -16,7 +21,7 @@ type Sender interface {
 type ConversationAware struct {
 	sender    Sender
 	questions map[ID]Question
-	mu        sync.RWMutex
+	mu        flu.RWMutex
 }
 
 func Conversations(sender Sender) *ConversationAware {
@@ -48,18 +53,23 @@ func (c *ConversationAware) Ask(ctx context.Context, chatID ChatID, sendable Sen
 	}
 }
 
-func (c *ConversationAware) Answer(message *Message) bool {
-	if message.ReplyToMessage != nil {
-		c.mu.RLock()
-		question, ok := c.questions[message.ReplyToMessage.ID]
-		c.mu.RUnlock()
-		if ok {
-			question <- message
-			return true
-		}
+func (c *ConversationAware) Answer(ctx context.Context, message *Message) error {
+	if message.ReplyToMessage == nil {
+		return ErrNotAQuestion
 	}
 
-	return false
+	defer c.mu.RLock().Unlock()
+	question, ok := c.questions[message.ReplyToMessage.ID]
+	if !ok {
+		return ErrForgotten
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case question <- message:
+		return nil
+	}
 }
 
 func (c *ConversationAware) addQuestion(id ID) Question {

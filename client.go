@@ -13,7 +13,7 @@ type Client interface {
 	Send(ctx context.Context, chatID ChatID, item Sendable, options *SendOptions) (*Message, error)
 	SendMediaGroup(ctx context.Context, chatID ChatID, media []Media, options *SendOptions) ([]Message, error)
 	Ask(ctx context.Context, chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error)
-	Answer(message *Message) bool
+	Answer(ctx context.Context, message *Message) error
 	Username() string
 }
 

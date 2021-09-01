@@ -97,8 +97,10 @@ func (bot *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 
 			default:
 				for _, update := range updates {
-					if update.Message != nil && bot.Answer(update.Message) {
-						continue
+					if update.Message != nil {
+						if err := bot.Answer(ctx, update.Message); err != nil {
+
+						}
 					}
 
 					select {
