@@ -40,13 +40,25 @@ func (o *SendOptions) body(chatID ChatID, item sendable) (flu.EncoderTo, error) 
 	return item.body(form)
 }
 
-type AnswerCallbackQueryOptions struct {
+type CopyOptions struct {
+	*SendOptions
+	Caption   string    `url:"caption,omitempty"`
+	ParseMode ParseMode `url:"parse_mode,omitempty"`
+}
+
+func (o *CopyOptions) body(chatID ChatID, ref MessageRef) (flu.EncoderTo, error) {
+	form := new(fluhttp.Form).Value(o)
+	form.Add("chat_id", chatID.queryParam())
+	return ref.body(form)
+}
+
+type AnswerOptions struct {
 	Text      string `url:"text,omitempty"`
 	ShowAlert bool   `url:"show_alert,omitempty"`
 	URL       string `url:"url,omitempty"`
 	CacheTime int    `url:"cache_time,omitempty"`
 }
 
-func (o AnswerCallbackQueryOptions) body(id string) flu.EncoderTo {
+func (o *AnswerOptions) body(id string) flu.EncoderTo {
 	return new(fluhttp.Form).Value(o).Add("callback_query_id", id)
 }

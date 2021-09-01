@@ -370,7 +370,7 @@ type Command struct {
 
 func (cmd *Command) Reply(ctx context.Context, client Client, text string) error {
 	if cmd.CallbackQueryID != "" {
-		_, err := client.AnswerCallbackQuery(ctx, cmd.CallbackQueryID, AnswerCallbackQueryOptions{Text: text})
+		_, err := client.AnswerCallbackQuery(ctx, cmd.CallbackQueryID, &AnswerOptions{Text: text})
 		return err
 	} else {
 		_, err := client.Send(ctx, cmd.Chat.ID, Text{Text: text}, &SendOptions{ReplyToMessageID: cmd.Message.ID})

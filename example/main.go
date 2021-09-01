@@ -14,11 +14,12 @@ import (
 
 	"github.com/jfk9w-go/flu"
 	fluhttp "github.com/jfk9w-go/flu/http"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 	"github.com/jfk9w-go/telegram-bot-api/ext/html"
 	"github.com/jfk9w-go/telegram-bot-api/ext/media"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const LoremIpsum = `
@@ -71,7 +72,7 @@ func (l CommandListener) Tick(ctx context.Context, client telegram.Client, cmd *
 		Text("Here's a ").
 		Bold("tick").
 		Italic(" for ya!").
-		Media(url, mvar, true).
+		Media(url, mvar, true, true).
 		Flush()
 }
 
@@ -98,9 +99,9 @@ func (l CommandListener) Lorem(ctx context.Context, client telegram.Client, cmd 
 
 	return html.
 		Text(LoremIpsum).
-		Media(url, mvar, false).
-		Media(url, mvar, false).
-		Media(url, mvar, false).
+		Media(url, mvar, false, true).
+		Media(url, mvar, false, true).
+		Media(url, mvar, false, true).
 		Flush()
 }
 

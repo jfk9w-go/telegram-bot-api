@@ -1,6 +1,11 @@
 package telegram
 
-import "time"
+import (
+	"time"
+
+	"github.com/jfk9w-go/flu"
+	fluhttp "github.com/jfk9w-go/flu/http"
+)
 
 // ParseMode is a parse_mode request parameter type.
 type ParseMode string
@@ -73,6 +78,11 @@ type (
 		Animation      *MessageFile    `json:"animation"`
 	}
 
+	MessageRef struct {
+		ChatID ChatID `url:"from_chat_id"`
+		ID     ID     `url:"message_id"`
+	}
+
 	// MessageEntity (https://core.telegram.org/bots/api#messageentity)
 	MessageEntity struct {
 		Type   string `json:"type"`
@@ -132,6 +142,23 @@ type (
 		InlineKeyboard [][]InlineKeyboardButton `json:"inline_keyboard"`
 	}
 )
+
+func (m *Message) Ref() MessageRef {
+	return MessageRef{
+		ChatID: m.Chat.ID,
+		ID:     m.ID,
+	}
+}
+
+func (r MessageRef) kind() string {
+	return "__internal__"
+}
+
+func (r MessageRef) body(form *fluhttp.Form) (flu.EncoderTo, error) {
+	return form.
+		Add("from_chat_id", r.ChatID.queryParam()).
+		Add("message_id", r.ID.queryParam()), nil
+}
 
 func (r ForceReply) self() ReplyMarkup {
 	return r

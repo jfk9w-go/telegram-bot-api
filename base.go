@@ -61,6 +61,26 @@ func (c BaseClient) GetMe(ctx context.Context) (*User, error) {
 	return user, c.Execute(ctx, "getMe", nil, user)
 }
 
+func (c BaseClient) ForwardMessage(ctx context.Context, chatID ChatID, ref MessageRef, options *SendOptions) (ID, error) {
+	var messageID ID
+	form, err := options.body(chatID, ref)
+	if err != nil {
+		return messageID, err
+	}
+
+	return messageID, c.Execute(ctx, "forwardMessage", form, &messageID)
+}
+
+func (c BaseClient) CopyMessage(ctx context.Context, chatID ChatID, ref MessageRef, options *CopyOptions) (ID, error) {
+	var messageID ID
+	form, err := options.body(chatID, ref)
+	if err != nil {
+		return messageID, err
+	}
+
+	return messageID, c.Execute(ctx, "copyMessage", form, &messageID)
+}
+
 // DeleteMessage is used to delete a message, including service messages, with the following limitations:
 // - A message can only be deleted if it was sent less than 48 hours ago.
 // - Bots can delete outgoing messages in private chats, groups, and supergroups.
@@ -123,7 +143,7 @@ func (c BaseClient) GetChatMember(ctx context.Context, chatID ChatID, userID ID)
 // The answer will be displayed to the user as a notification at the top of the chat screen or as an alert.
 // On success, True is returned.
 // https://core.telegram.org/bots/api#answercallbackquery
-func (c BaseClient) AnswerCallbackQuery(ctx context.Context, id string, options AnswerCallbackQueryOptions) (bool, error) {
+func (c BaseClient) AnswerCallbackQuery(ctx context.Context, id string, options *AnswerOptions) (bool, error) {
 	var ok bool
 	return ok, c.Execute(ctx, "answerCallbackQuery", options.body(id), &ok)
 }

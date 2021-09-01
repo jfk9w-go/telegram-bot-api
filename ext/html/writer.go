@@ -5,8 +5,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/jfk9w-go/telegram-bot-api/ext/media"
 	"golang.org/x/net/html"
+
+	"github.com/jfk9w-go/telegram-bot-api/ext/media"
 )
 
 type Writer struct {
@@ -159,11 +160,17 @@ func (w *Writer) MarkupString(markup string) *Writer {
 	return w.Markup(strings.NewReader(markup))
 }
 
-func (w *Writer) Media(url string, ref media.Ref, collapsible bool) *Writer {
+func (w *Writer) Media(url string, ref media.Ref, collapsible bool, anchored bool) *Writer {
 	if w.err != nil || w.Out.IsOverflown() {
 		return w
 	}
-	w.err = w.Out.AddMedia(w.Context, ref, Anchor("[media]", url), collapsible)
+
+	anchor := ""
+	if anchored {
+		anchor = Anchor("[media]", url)
+	}
+
+	w.err = w.Out.AddMedia(w.Context, ref, anchor, collapsible)
 	return w
 }
 
