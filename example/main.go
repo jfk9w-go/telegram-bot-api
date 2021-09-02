@@ -201,5 +201,6 @@ func main() {
 		}),
 	)
 
+	logrus.Infof("bot username: %s", bot.Username())
 	flu.AwaitSignal(syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
 }

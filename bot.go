@@ -74,23 +74,24 @@ func (bot *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 
 			default:
 				for _, update := range updates {
-					if update.Message != nil {
+					if update.Message != nil && update.Message.ReplyToMessage != nil {
 						if err := bot.Answer(ctx, update.Message); err != nil {
 							if flu.IsContextRelated(err) {
 								return
 							}
 
 							bot.log().Warnf("answer %d: %s", update.Message.ID, err)
-							continue
+						}
+					} else {
+						select {
+						case <-ctx.Done():
+							return
+						case channel <- update:
+							break
 						}
 					}
 
-					select {
-					case <-ctx.Done():
-						return
-					case channel <- update:
-						options.Offset = update.ID.Increment()
-					}
+					options.Offset = update.ID.Increment()
 				}
 			}
 		}
