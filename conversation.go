@@ -7,11 +7,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	ErrNotAQuestion = errors.New("not a question")
-	ErrForgotten    = errors.New("forgotten")
-)
-
 type Question chan *Message
 
 type Sender interface {
@@ -55,13 +50,13 @@ func (c *ConversationAware) Ask(ctx context.Context, chatID ChatID, sendable Sen
 
 func (c *ConversationAware) Answer(ctx context.Context, message *Message) error {
 	if message.ReplyToMessage == nil {
-		return ErrNotAQuestion
+		return errors.New("not a question")
 	}
 
 	defer c.mu.RLock().Unlock()
 	question, ok := c.questions[message.ReplyToMessage.ID]
 	if !ok {
-		return ErrForgotten
+		return errors.New("forgotten")
 	}
 
 	select {
