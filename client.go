@@ -6,12 +6,13 @@ type Client interface {
 	GetMe(ctx context.Context) (*User, error)
 	ForwardMessage(ctx context.Context, chatID ChatID, ref MessageRef, options *SendOptions) (ID, error)
 	CopyMessage(ctx context.Context, chatID ChatID, ref MessageRef, options *CopyOptions) (ID, error)
-	DeleteMessage(ctx context.Context, chatID ChatID, messageID ID) (bool, error)
+	DeleteMessage(ctx context.Context, ref MessageRef) error
+	EditMessageReplyMarkup(ctx context.Context, ref MessageRef, markup ReplyMarkup) (*Message, error)
 	ExportChatInviteLink(ctx context.Context, chatID ChatID) (string, error)
 	GetChat(ctx context.Context, chatID ChatID) (*Chat, error)
 	GetChatAdministrators(ctx context.Context, chatID ChatID) ([]ChatMember, error)
 	GetChatMember(ctx context.Context, chatID ChatID, userID ID) (*ChatMember, error)
-	AnswerCallbackQuery(ctx context.Context, id string, options *AnswerOptions) (bool, error)
+	AnswerCallbackQuery(ctx context.Context, id string, options *AnswerOptions) error
 	Send(ctx context.Context, chatID ChatID, item Sendable, options *SendOptions) (*Message, error)
 	SendMediaGroup(ctx context.Context, chatID ChatID, media []Media, options *SendOptions) ([]Message, error)
 	Ask(ctx context.Context, chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error)

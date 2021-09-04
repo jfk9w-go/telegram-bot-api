@@ -2,10 +2,13 @@ package telegram
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/jfk9w-go/flu"
 	fluhttp "github.com/jfk9w-go/flu/http"
+	"github.com/pkg/errors"
 )
 
 type BaseClient func(string) *fluhttp.Request
@@ -90,12 +93,37 @@ func (c BaseClient) CopyMessage(ctx context.Context, chatID ChatID, ref MessageR
 // Returns True on success.
 // See
 //    https://core.telegram.org/bots/api#deletemessage
-func (c BaseClient) DeleteMessage(ctx context.Context, chatID ChatID, messageID ID) (bool, error) {
-	body := new(fluhttp.Form).
-		Set("chat_id", chatID.queryParam()).
-		Set("message_id", messageID.queryParam())
+func (c BaseClient) DeleteMessage(ctx context.Context, ref MessageRef) error {
 	var ok bool
-	return ok, c.Execute(ctx, "deleteMessage", body, &ok)
+	if err := c.Execute(ctx, "deleteMessage", ref.form(), &ok); err != nil {
+		return err
+	}
+
+	if !ok {
+		return errors.New("not ok")
+	}
+
+	return nil
+}
+
+func (c BaseClient) EditMessageReplyMarkup(ctx context.Context, ref MessageRef, markup ReplyMarkup) (*Message, error) {
+	markupJSON, err := json.Marshal(markup)
+	if err != nil {
+		return nil, err
+	}
+
+	form := ref.form().Set("reply_markup", string(markupJSON))
+	message := new(Message)
+	if err := c.Execute(ctx, "editMessageReplyMarkup", form, &message); err != nil {
+		if tgerr := new(Error); errors.As(err, tgerr) &&
+			strings.Contains(tgerr.Description, "message is not modified") {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	return message, nil
 }
 
 func (c BaseClient) ExportChatInviteLink(ctx context.Context, chatID ChatID) (string, error) {
@@ -143,9 +171,17 @@ func (c BaseClient) GetChatMember(ctx context.Context, chatID ChatID, userID ID)
 // The answer will be displayed to the user as a notification at the top of the chat screen or as an alert.
 // On success, True is returned.
 // https://core.telegram.org/bots/api#answercallbackquery
-func (c BaseClient) AnswerCallbackQuery(ctx context.Context, id string, options *AnswerOptions) (bool, error) {
+func (c BaseClient) AnswerCallbackQuery(ctx context.Context, id string, options *AnswerOptions) error {
 	var ok bool
-	return ok, c.Execute(ctx, "answerCallbackQuery", options.body(id), &ok)
+	if err := c.Execute(ctx, "answerCallbackQuery", options.body(id), &ok); err != nil {
+		return err
+	}
+
+	if !ok {
+		return errors.New("not ok")
+	}
+
+	return nil
 }
 
 func (c BaseClient) Execute(ctx context.Context, method string, body flu.EncoderTo, resp interface{}) error {

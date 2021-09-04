@@ -69,8 +69,7 @@ func (cmd *Command) Arg(i int) string {
 
 func (cmd *Command) Reply(ctx context.Context, client Client, text string) error {
 	if cmd.CallbackQueryID != "" {
-		_, err := client.AnswerCallbackQuery(ctx, cmd.CallbackQueryID, &AnswerOptions{Text: text})
-		return err
+		return client.AnswerCallbackQuery(ctx, cmd.CallbackQueryID, &AnswerOptions{Text: text})
 	}
 
 	_, err := client.Send(ctx, cmd.Chat.ID, Text{Text: text}, &SendOptions{ReplyToMessageID: cmd.Message.ID})
@@ -109,8 +108,7 @@ func (cmd *Command) Start(ctx context.Context, client Client) error {
 
 	data := []byte(cmd.Key + " " + cmd.collectArgs())
 	url := fmt.Sprintf("https://t.me/%s?start=%s", client.Username(), base64.URLEncoding.EncodeToString(data))
-	_, err := client.AnswerCallbackQuery(ctx, cmd.CallbackQueryID, &AnswerOptions{URL: url})
-	return err
+	return client.AnswerCallbackQuery(ctx, cmd.CallbackQueryID, &AnswerOptions{URL: url})
 }
 
 type Button [3]string

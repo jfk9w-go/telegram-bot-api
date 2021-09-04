@@ -160,6 +160,12 @@ func (r MessageRef) body(form *fluhttp.Form) (flu.EncoderTo, error) {
 		Add("message_id", r.ID.queryParam()), nil
 }
 
+func (r MessageRef) form() *fluhttp.Form {
+	return new(fluhttp.Form).
+		Add("chat_id", r.ChatID.queryParam()).
+		Add("message_id", r.ID.queryParam())
+}
+
 func (r ForceReply) self() ReplyMarkup {
 	return r
 }
