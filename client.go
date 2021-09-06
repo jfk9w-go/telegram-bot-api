@@ -11,6 +11,7 @@ type Client interface {
 	ExportChatInviteLink(ctx context.Context, chatID ChatID) (string, error)
 	GetChat(ctx context.Context, chatID ChatID) (*Chat, error)
 	GetChatAdministrators(ctx context.Context, chatID ChatID) ([]ChatMember, error)
+	GetChatMemberCount(ctx context.Context, chatID ChatID) (int64, error)
 	GetChatMember(ctx context.Context, chatID ChatID, userID ID) (*ChatMember, error)
 	AnswerCallbackQuery(ctx context.Context, id string, options *AnswerOptions) error
 	Send(ctx context.Context, chatID ChatID, item Sendable, options *SendOptions) (*Message, error)

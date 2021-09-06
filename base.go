@@ -156,6 +156,14 @@ func (c BaseClient) GetChatAdministrators(ctx context.Context, chatID ChatID) ([
 	return members, c.Execute(ctx, "getChatAdministrators", body, &members)
 }
 
+func (c BaseClient) GetChatMemberCount(ctx context.Context, chatID ChatID) (int64, error) {
+	body := new(fluhttp.Form).
+		Set("chat_id", chatID.queryParam())
+
+	var count int64
+	return count, c.Execute(ctx, "getChatMemberCount", body, &count)
+}
+
 // GetChatMember is used to get information about a member of a chat.
 // Returns a ChatMember object on success.
 // See https://core.telegram.org/bots/api#getchatmember
