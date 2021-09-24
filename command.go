@@ -164,56 +164,60 @@ func (r CommandRegistry) OnCommand(ctx context.Context, client Client, cmd *Comm
 
 func CommandRegistryFrom(value interface{}) CommandRegistry {
 	valueType := reflect.TypeOf(value)
-	elemType := valueType
-	if elemType.Kind() == reflect.Ptr {
-		elemType = elemType.Elem()
-	}
-
-	log := logrus.WithField("service", fmt.Sprintf("%T", value))
 	registry := make(CommandRegistry)
-	for i := 0; i < elemType.NumMethod(); i++ {
-		method := elemType.Method(i)
-		methodType := method.Type
-		if method.IsExported() && methodType.NumIn() == 4 && methodType.NumOut() == 1 &&
-			methodType.In(1).AssignableTo(reflect.TypeOf(new(context.Context)).Elem()) &&
-			methodType.In(2).AssignableTo(reflect.TypeOf(new(Client)).Elem()) &&
-			methodType.In(3).AssignableTo(reflect.TypeOf(new(Command))) &&
-			methodType.Out(0).AssignableTo(reflect.TypeOf(new(error)).Elem()) {
+	log := logrus.WithField("service", fmt.Sprintf("%T", value))
 
-			name := method.Name
-			runes := []rune(name)
-			runes[0] = unicode.ToLower(runes[0])
-			name = string(runes)
-			if strings.HasSuffix(name, "Callback") {
-				name = name[:len(name)-8]
-			} else {
-				name = "/" + name
-			}
+	elemType := valueType
+	for {
+		for i := 0; i < elemType.NumMethod(); i++ {
+			method := elemType.Method(i)
+			methodType := method.Type
+			if method.IsExported() && methodType.NumIn() == 4 && methodType.NumOut() == 1 &&
+				methodType.In(1).AssignableTo(reflect.TypeOf(new(context.Context)).Elem()) &&
+				methodType.In(2).AssignableTo(reflect.TypeOf(new(Client)).Elem()) &&
+				methodType.In(3).AssignableTo(reflect.TypeOf(new(Command))) &&
+				methodType.Out(0).AssignableTo(reflect.TypeOf(new(error)).Elem()) {
 
-			handle := CommandListenerFunc(func(ctx context.Context, client Client, command *Command) error {
-				err := method.Func.Call([]reflect.Value{
-					reflect.ValueOf(value),
-					reflect.ValueOf(ctx),
-					reflect.ValueOf(client),
-					reflect.ValueOf(command),
-				})[0].Interface()
-				if err != nil {
-					return err.(error)
+				name := method.Name
+				runes := []rune(name)
+				runes[0] = unicode.ToLower(runes[0])
+				name = string(runes)
+				if strings.HasSuffix(name, "Callback") {
+					name = name[:len(name)-8]
+				} else {
+					name = "/" + name
 				}
 
-				return nil
-			})
+				handle := CommandListenerFunc(func(ctx context.Context, client Client, command *Command) error {
+					err := method.Func.Call([]reflect.Value{
+						reflect.ValueOf(value),
+						reflect.ValueOf(ctx),
+						reflect.ValueOf(client),
+						reflect.ValueOf(command),
+					})[0].Interface()
+					if err != nil {
+						return err.(error)
+					}
 
-			registry[name] = handle
-			log.WithField("command", name).
-				WithField("handler", method.Name).
-				Infof("command handler registered")
+					return nil
+				})
+
+				registry[name] = handle
+				log.WithField("command", name).
+					WithField("handler", method.Name).
+					Infof("command handler registered")
+			}
 		}
-	}
 
-	if len(registry) == 0 {
-		log.Fatal("no command listeners found")
-	}
+		if elemType.Kind() == reflect.Ptr {
+			elemType = elemType.Elem()
+			continue
+		}
 
-	return registry
+		if len(registry) == 0 {
+			log.Fatal("no command listeners found")
+		}
+
+		return registry
+	}
 }
