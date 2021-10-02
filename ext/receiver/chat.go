@@ -10,12 +10,13 @@ import (
 )
 
 type Chat struct {
-	Sender      telegram.Sender
-	ID          telegram.ChatID
-	Silent      bool
-	Preview     bool
-	ParseMode   telegram.ParseMode
-	ReplyMarkup telegram.ReplyMarkup
+	Sender           telegram.Sender
+	ID               telegram.ChatID
+	Silent           bool
+	Preview          bool
+	ParseMode        telegram.ParseMode
+	ReplyMarkup      telegram.ReplyMarkup
+	SkipOnMediaError bool
 }
 
 func (r *Chat) SendText(ctx context.Context, text string) error {
@@ -42,6 +43,9 @@ func (r *Chat) SendMedia(ctx context.Context, ref media.Ref, caption string) err
 		}
 
 		logrus.WithField("chat", r.ID).Warnf("send media: %s", err)
+	} else if r.SkipOnMediaError {
+		logrus.WithField("chat", r.ID).Warnf("send media: %s", err)
+		return nil
 	}
 
 	return r.sendText(ctx, caption, true)

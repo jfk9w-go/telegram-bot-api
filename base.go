@@ -75,13 +75,16 @@ func (c BaseClient) ForwardMessage(ctx context.Context, chatID ChatID, ref Messa
 }
 
 func (c BaseClient) CopyMessage(ctx context.Context, chatID ChatID, ref MessageRef, options *CopyOptions) (ID, error) {
-	var messageID ID
-	form, err := options.body(chatID, ref)
-	if err != nil {
-		return messageID, err
+	var resp struct {
+		MessageID ID `json:"message_id"`
 	}
 
-	return messageID, c.Execute(ctx, "copyMessage", form, &messageID)
+	form, err := options.body(chatID, ref)
+	if err != nil {
+		return 0, err
+	}
+
+	return resp.MessageID, c.Execute(ctx, "copyMessage", form, &resp)
 }
 
 // DeleteMessage is used to delete a message, including service messages, with the following limitations:
