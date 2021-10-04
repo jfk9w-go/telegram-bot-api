@@ -240,7 +240,7 @@ func (bot *Bot) extractCommandCallbackQuery(query *CallbackQuery) *Command {
 }
 
 func trim(value string) string {
-	return strings.Trim(value, " ")
+	return strings.Trim(value, " \n\t\v")
 }
 
 func (bot *Bot) Close() error {

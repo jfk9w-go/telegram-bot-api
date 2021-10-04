@@ -98,7 +98,7 @@ func (cmd *Command) collectArgs() string {
 	}
 
 	writer.Flush()
-	return b.String()
+	return trim(b.String())
 }
 
 func (cmd *Command) Start(ctx context.Context, client Client) error {
