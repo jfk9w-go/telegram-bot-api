@@ -195,6 +195,53 @@ func (c BaseClient) AnswerCallbackQuery(ctx context.Context, id string, options 
 	return nil
 }
 
+func (c BaseClient) SetMyCommands(ctx context.Context, scope *BotCommandScope, commands []BotCommand) error {
+	type request struct {
+		Commands []BotCommand     `json:"commands"`
+		Scope    *BotCommandScope `json:"scope,omitempty"`
+	}
+
+	req := request{commands, scope}
+	var ok bool
+	if err := c.Execute(ctx, "setMyCommands", flu.JSON(req), &ok); err != nil {
+		return err
+	}
+
+	if !ok {
+		return errors.New("not ok")
+	}
+
+	return nil
+}
+
+func (c BaseClient) GetMyCommands(ctx context.Context, scope *BotCommandScope) ([]BotCommand, error) {
+	type request struct {
+		Scope *BotCommandScope `json:"scope,omitempty"`
+	}
+
+	req := request{scope}
+	resp := make([]BotCommand, 0)
+	return resp, c.Execute(ctx, "getMyCommands", flu.JSON(req), &resp)
+}
+
+func (c BaseClient) DeleteMyCommands(ctx context.Context, scope *BotCommandScope) error {
+	type request struct {
+		Scope *BotCommandScope `json:"scope,omitempty"`
+	}
+
+	req := request{scope}
+	var ok bool
+	if err := c.Execute(ctx, "deleteMyCommands", flu.JSON(req), &ok); err != nil {
+		return err
+	}
+
+	if !ok {
+		return errors.New("not ok")
+	}
+
+	return nil
+}
+
 func (c BaseClient) Execute(ctx context.Context, method string, body flu.EncoderTo, resp interface{}) error {
 	return c(method).
 		BodyEncoder(body).

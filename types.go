@@ -38,6 +38,18 @@ func (t ChatType) SendDelay() time.Duration {
 	return SendDelays[t]
 }
 
+type BotCommandScopeType string
+
+const (
+	BotCommandScopeDefault               BotCommandScopeType = "default"
+	BotCommandScopeAllPrivateChats       BotCommandScopeType = "all_private_chats"
+	BotCommandScopeAllGroupChats         BotCommandScopeType = "all_group_chats"
+	BotCommandScopeAllChatAdministrators BotCommandScopeType = "all_chat_administrators"
+	BotCommandScopeChat                  BotCommandScopeType = "chat"
+	BotCommandScopeChatAdministrators    BotCommandScopeType = "chat_administrators"
+	BotCommandScopeChatMember            BotCommandScopeType = "chat_member"
+)
+
 type (
 	// User (https://core.telegram.org/bots/api#user)
 	User struct {
@@ -140,6 +152,17 @@ type (
 	// InlineKeyboardMarkup (https://core.telegram.org/bots/api#inlinekeyboardmarkup)
 	InlineKeyboardMarkup struct {
 		InlineKeyboard [][]InlineKeyboardButton `json:"inline_keyboard"`
+	}
+
+	BotCommandScope struct {
+		Type   BotCommandScopeType `json:"type"`
+		ChatID ChatID              `json:"chat_id,omitempty"`
+		UserID ID                  `json:"user_id,omitempty"`
+	}
+
+	BotCommand struct {
+		Command     string `json:"command"`
+		Description string `json:"description"`
 	}
 )
 

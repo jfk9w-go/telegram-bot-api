@@ -7,15 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
-
-	"github.com/jfk9w-go/flu/metrics"
-
 	"github.com/jfk9w-go/flu"
-
-	"github.com/sirupsen/logrus"
-
 	fluhttp "github.com/jfk9w-go/flu/http"
+	"github.com/jfk9w-go/flu/metrics"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type Bot struct {

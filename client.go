@@ -16,6 +16,9 @@ type Client interface {
 	AnswerCallbackQuery(ctx context.Context, id string, options *AnswerOptions) error
 	Send(ctx context.Context, chatID ChatID, item Sendable, options *SendOptions) (*Message, error)
 	SendMediaGroup(ctx context.Context, chatID ChatID, media []Media, options *SendOptions) ([]Message, error)
+	SetMyCommands(ctx context.Context, scope *BotCommandScope, commands []BotCommand) error
+	GetMyCommands(ctx context.Context, scope *BotCommandScope) ([]BotCommand, error)
+	DeleteMyCommands(ctx context.Context, scope *BotCommandScope) error
 	Ask(ctx context.Context, chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error)
 	Answer(ctx context.Context, message *Message) error
 	Username() string

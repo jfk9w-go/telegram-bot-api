@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"unicode"
 
 	"github.com/jfk9w-go/flu/metrics"
 	"github.com/pkg/errors"
@@ -178,12 +177,9 @@ func CommandRegistryFrom(value interface{}) CommandRegistry {
 				methodType.In(3).AssignableTo(reflect.TypeOf(new(Command))) &&
 				methodType.Out(0).AssignableTo(reflect.TypeOf(new(error)).Elem()) {
 
-				name := method.Name
-				runes := []rune(name)
-				runes[0] = unicode.ToLower(runes[0])
-				name = string(runes)
-				if strings.HasSuffix(name, "Callback") {
-					name = name[:len(name)-8]
+				name := strings.ToLower(method.Name)
+				if strings.HasSuffix(name, "_callback") {
+					name = name[:len(name)-9]
 				} else {
 					name = "/" + name
 				}
