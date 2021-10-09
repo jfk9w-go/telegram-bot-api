@@ -12,6 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var GormDialects = app.GormDialects
+
 type Instance struct {
 	*app.Base
 	extensions []Extension
@@ -59,9 +61,10 @@ func (app *Instance) Run(ctx context.Context) error {
 		id := extension.ID()
 		listener, err := extension.Apply(ctx, app)
 		if err != nil {
-			return errors.Wrapf(err, "apply plugin %s", id)
+			return errors.Wrapf(err, "apply extension %s", id)
 		}
 
+		log := logrus.WithField("extension", id)
 		if listener != nil {
 			local := telegram.CommandRegistryFrom(listener)
 			scoped, ok := listener.(Scoped)
@@ -70,16 +73,22 @@ func (app *Instance) Run(ctx context.Context) error {
 				for key, listener := range local {
 					commands.Add(scope, key)
 					global.Add(key, scope.Wrap(listener))
+					log.WithFields(logrus.Fields{
+						"key":     key,
+						"chatIDs": scope.ChatIDs,
+						"userIDs": scope.UserIDs,
+					}).Infof("registered scoped command")
 				}
 			} else {
 				for key, listener := range global {
 					commands.AddDefault(key)
 					global.Add(key, listener)
+					log.WithField("key", key).Infof("registered public command")
 				}
 			}
 		}
 
-		logrus.WithField("service", id).Infof("init ok")
+		log.Infof("init ok")
 	}
 
 	bot, err := app.GetBot(ctx)
