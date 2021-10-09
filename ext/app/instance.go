@@ -7,24 +7,14 @@ import (
 
 	"github.com/jfk9w-go/flu"
 	"github.com/jfk9w-go/flu/app"
-	gormutil "github.com/jfk9w-go/flu/gorm"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 )
-
-type GormDialect func(string) gorm.Dialector
-
-var GormDialects = map[string]GormDialect{
-	"postgres": postgres.Open,
-}
 
 type Instance struct {
 	*app.Base
 	extensions []Extension
-	databases  map[string]*gorm.DB
 	bot        *telegram.Bot
 }
 
@@ -37,32 +27,11 @@ func Create(version string, clock flu.Clock, config flu.File) (*Instance, error)
 	return &Instance{
 		Base:       base,
 		extensions: make([]Extension, 0),
-		databases:  make(map[string]*gorm.DB),
 	}, nil
 }
 
 func (app *Instance) ApplyExtensions(extensions ...Extension) {
 	app.extensions = append(app.extensions, extensions...)
-}
-
-func (app *Instance) GetDatabase(driver, conn string) (*gorm.DB, error) {
-	if db, ok := app.databases[conn]; ok {
-		return db, nil
-	}
-
-	dialect, ok := GormDialects[driver]
-	if !ok {
-		logrus.Fatalf("unknown dialect %s for %s", driver, conn)
-	}
-
-	db, err := gorm.Open(dialect(conn), gormutil.DefaultConfig)
-	if err != nil {
-		return nil, errors.Wrapf(err, "create database for %s", conn)
-	}
-
-	app.Manage((*gormutil.Closer)(db))
-	app.databases[conn] = db
-	return db, nil
 }
 
 func (app *Instance) GetBot(ctx context.Context) (*telegram.Bot, error) {
