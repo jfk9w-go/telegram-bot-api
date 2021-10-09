@@ -6,10 +6,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/jfk9w-go/telegram-bot-api/ext/receiver"
-
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 	"github.com/jfk9w-go/telegram-bot-api/ext/media"
+	"github.com/jfk9w-go/telegram-bot-api/ext/receiver"
 	"golang.org/x/exp/utf8string"
 )
 
