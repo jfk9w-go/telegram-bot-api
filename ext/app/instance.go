@@ -53,7 +53,8 @@ func (app *Instance) GetBot(ctx context.Context) (*telegram.Bot, error) {
 func (app *Instance) Run(ctx context.Context) error {
 	global := make(telegram.CommandRegistry).
 		AddFunc("/start", func(ctx context.Context, client telegram.Client, cmd *telegram.Command) error {
-			return cmd.Reply(ctx, client, fmt.Sprintf("hi, %d @ %d", cmd.User.ID, cmd.Chat.ID))
+			return cmd.Reply(ctx, client, fmt.Sprintf("hi, %d @ %d\ni'm %s @ %s",
+				cmd.User.ID, cmd.Chat.ID, client.Username(), app.GetVersion()))
 		})
 
 	commands := make(Commands)
