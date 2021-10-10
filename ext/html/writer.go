@@ -111,20 +111,20 @@ func (w *Writer) EndTag() *Writer {
 	return w
 }
 
-func (w *Writer) Bold(text string) *Writer {
-	return w.StartTag("b", nil).Text(text).EndTag()
+func (w *Writer) Bold(text string, args ...interface{}) *Writer {
+	return w.StartTag("b", nil).Text(text, args...).EndTag()
 }
 
-func (w *Writer) Italic(text string) *Writer {
-	return w.StartTag("i", nil).Text(text).EndTag()
+func (w *Writer) Italic(text string, args ...interface{}) *Writer {
+	return w.StartTag("i", nil).Text(text, args...).EndTag()
 }
 
-func (w *Writer) Code(text string) *Writer {
-	return w.StartTag("code", nil).Text(text).EndTag()
+func (w *Writer) Code(text string, args ...interface{}) *Writer {
+	return w.StartTag("code", nil).Text(text, args...).EndTag()
 }
 
-func (w *Writer) Pre(text string) *Writer {
-	return w.StartTag("pre", nil).Text(text).EndTag()
+func (w *Writer) Pre(text string, args ...interface{}) *Writer {
+	return w.StartTag("pre", nil).Text(text, args...).EndTag()
 }
 
 func (w *Writer) Link(text, href string) *Writer {
