@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/jfk9w-go/flu/metrics"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -14,8 +15,11 @@ type Scoped interface {
 }
 
 type CommandScope struct {
+	all              bool
 	ChatIDs, UserIDs map[telegram.ID]bool
 }
+
+var Public = CommandScope{all: true}
 
 func (s CommandScope) Wrap(listener telegram.CommandListener) telegram.CommandListenerFunc {
 	return func(ctx context.Context, client telegram.Client, cmd *telegram.Command) error {
@@ -23,54 +27,105 @@ func (s CommandScope) Wrap(listener telegram.CommandListener) telegram.CommandLi
 			return listener.OnCommand(ctx, client, cmd)
 		}
 
-		return errors.New("forbidden")
+		return nil
 	}
 }
 
 func (s CommandScope) allow(chatID, userID telegram.ID) bool {
-	if s.UserIDs != nil {
-		return userID == chatID && s.UserIDs[userID]
+	if s.all {
+		return true
 	}
 
 	if s.ChatIDs != nil {
 		return userID != chatID && s.ChatIDs[chatID]
 	}
 
+	if s.UserIDs != nil {
+		return userID == chatID && s.UserIDs[userID]
+	}
+
 	return false
+}
+
+func (s CommandScope) Transform(body func(scope telegram.BotCommandScope)) {
+	if s.all {
+		body(telegram.BotCommandScope{Type: telegram.BotCommandScopeDefault})
+		return
+	}
+
+	for chatID := range s.ChatIDs {
+		body(telegram.BotCommandScope{Type: telegram.BotCommandScopeChat, ChatID: chatID})
+	}
+
+	if len(s.UserIDs) > 0 {
+		body(telegram.BotCommandScope{Type: telegram.BotCommandScopeAllPrivateChats})
+	}
+}
+
+func slice(ids map[telegram.ID]bool) []telegram.ID {
+	slice := make([]telegram.ID, len(ids))
+	i := 0
+	for id := range ids {
+		slice[i] = id
+		i++
+	}
+
+	return slice
+}
+
+func (s CommandScope) Labels() metrics.Labels {
+	labels := metrics.Labels{}
+	if s.all {
+		return labels.Add("scope.all", true)
+	}
+
+	if len(s.ChatIDs) > 0 {
+		labels = labels.Add("scope.chatIDs", slice(s.ChatIDs))
+	}
+
+	if len(s.UserIDs) > 0 {
+		labels = labels.Add("scope.userIDs", slice(s.UserIDs))
+	}
+
+	return labels
 }
 
 type Commands map[telegram.BotCommandScope]map[string]string
 
-func (c Commands) Add(scope CommandScope, commands ...string) {
-	if len(scope.UserIDs) > 0 {
-		c.add(telegram.BotCommandScope{Type: telegram.BotCommandScopeAllPrivateChats}, commands...)
-	}
-
-	for chatID := range scope.ChatIDs {
-		c.add(telegram.BotCommandScope{Type: telegram.BotCommandScopeChat, ChatID: chatID}, commands...)
-	}
+func (c Commands) DefaultStart(version string) {
+	Public.Transform(func(scope telegram.BotCommandScope) {
+		c.Add(scope, "/start", "Get debug info.")
+	})
 }
 
-func (c Commands) AddDefault(commands ...string) {
-	c.add(telegram.BotCommandScope{Type: telegram.BotCommandScopeDefault}, commands...)
+func (c Commands) AddAll(scope telegram.BotCommandScope, commands ...string) {
+	all := make(map[string]string, len(commands))
+	for _, command := range commands {
+		all[command] = humanizeKey(command)
+	}
+
+	c.add(scope, all)
 }
 
-func (c Commands) add(scope telegram.BotCommandScope, commands ...string) {
+func (c Commands) Add(scope telegram.BotCommandScope, command, description string) {
+	c.add(scope, map[string]string{command: description})
+}
+
+func (c Commands) add(scope telegram.BotCommandScope, commands map[string]string) {
 	sc, ok := c[scope]
 	if !ok {
 		sc = make(map[string]string)
 		c[scope] = sc
 	}
 
-	sc["start"] = "Get user & chat ID"
-	for _, command := range commands {
+	for command, description := range commands {
 		if strings.HasPrefix(command, "/") {
 			command := command[1:]
 			if _, ok := sc[command]; ok {
 				logrus.Fatalf("duplicate command handler for %s", command)
 			}
 
-			sc[command] = humanizeKey(command)
+			sc[command] = description
 		}
 	}
 }

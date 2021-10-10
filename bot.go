@@ -96,7 +96,7 @@ func (bot *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 	return channel
 }
 
-func (bot *Bot) Username() string {
+func (bot *Bot) Username() Username {
 	bot.once.Do(func() {
 		ctx, cancel := context.WithTimeout(bot.ctx, time.Minute)
 		defer cancel()
@@ -107,7 +107,7 @@ func (bot *Bot) Username() string {
 		}
 	})
 
-	return bot.me.Username.String()
+	return *bot.me.Username
 }
 
 var DefaultCommandsOptions = &GetUpdatesOptions{

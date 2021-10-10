@@ -21,7 +21,7 @@ type Client interface {
 	DeleteMyCommands(ctx context.Context, scope *BotCommandScope) error
 	Ask(ctx context.Context, chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error)
 	Answer(ctx context.Context, message *Message) error
-	Username() string
+	Username() Username
 }
 
 func InlineKeyboard(rows ...[]Button) ReplyMarkup {

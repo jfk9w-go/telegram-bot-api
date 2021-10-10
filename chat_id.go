@@ -42,11 +42,11 @@ func (id ID) String() string {
 type Username string
 
 func (username Username) queryParam() string {
-	return "@" + username.String()
+	return username.String()
 }
 
 func (username Username) String() string {
-	return string(username)
+	return "@" + string(username)
 }
 
 // ChatID is either an ID or channel Username in various API calls.

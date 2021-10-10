@@ -2,12 +2,12 @@ package html
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 
-	"golang.org/x/net/html"
-
 	"github.com/jfk9w-go/telegram-bot-api/ext/media"
+	"golang.org/x/net/html"
 )
 
 type Writer struct {
@@ -63,9 +63,13 @@ func (w *Writer) StartTag(name string, attrs []html.Attribute) *Writer {
 	return w
 }
 
-func (w *Writer) Text(text string) *Writer {
+func (w *Writer) Text(text string, args ...interface{}) *Writer {
 	if w.err != nil || w.Out.IsOverflown() {
 		return w
+	}
+
+	if len(args) > 0 {
+		text = fmt.Sprintf(text, args...)
 	}
 
 	text = html.EscapeString(text)

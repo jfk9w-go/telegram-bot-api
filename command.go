@@ -24,7 +24,7 @@ type Command struct {
 	CallbackQueryID string
 }
 
-func (cmd *Command) init(username, value string) {
+func (cmd *Command) init(username Username, value string) {
 	cmd.Key = value
 
 	space := strings.Index(value, " ")
@@ -34,7 +34,7 @@ func (cmd *Command) init(username, value string) {
 	}
 
 	at := strings.Index(cmd.Key, "@")
-	if at > 0 && len(cmd.Key) > at+1 && username == cmd.Key[at+1:] {
+	if at > 0 && len(cmd.Key) > at+1 && string(username) == cmd.Key[at+1:] {
 		cmd.Key = cmd.Key[:at]
 	}
 
