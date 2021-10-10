@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/jfk9w-go/flu/metrics"
@@ -92,10 +93,26 @@ func (s CommandScope) Labels() metrics.Labels {
 
 type Commands map[telegram.BotCommandScope]map[string]string
 
-func (c Commands) DefaultStart(version string) {
-	Public.Transform(func(scope telegram.BotCommandScope) {
-		c.Add(scope, "/start", "Get debug info.")
+func AddDefaultStart(commands Commands, registry telegram.CommandRegistry, version string) {
+	command := "/start"
+	description := "Get debug info"
+
+	registry.AddFunc(command, func(ctx context.Context, tgclient telegram.Client, cmd *telegram.Command) error {
+		text := fmt.Sprintf("User ID: %d\nChat ID: %s\nBot: %s\nVersion: %s",
+			cmd.User.ID, cmd.Chat.ID, tgclient.Username(), version)
+		return cmd.Reply(ctx, tgclient, text)
 	})
+
+	for _, sc := range commands {
+		add(sc, command, description)
+	}
+
+	scope := telegram.BotCommandScope{Type: telegram.BotCommandScopeDefault}
+	if _, ok := commands[scope]; !ok {
+		sc := make(map[string]string)
+		add(sc, command, description)
+		commands[scope] = sc
+	}
 }
 
 func (c Commands) AddAll(scope telegram.BotCommandScope, commands ...string) {
@@ -119,14 +136,18 @@ func (c Commands) add(scope telegram.BotCommandScope, commands map[string]string
 	}
 
 	for command, description := range commands {
-		if strings.HasPrefix(command, "/") {
-			command := command[1:]
-			if _, ok := sc[command]; ok {
-				logrus.Fatalf("duplicate command handler for %s", command)
-			}
+		add(sc, command, description)
+	}
+}
 
-			sc[command] = description
+func add(sc map[string]string, command, description string) {
+	if strings.HasPrefix(command, "/") {
+		command := command[1:]
+		if _, ok := sc[command]; ok {
+			logrus.Fatalf("duplicate command handler for %s", command)
 		}
+
+		sc[command] = description
 	}
 }
 

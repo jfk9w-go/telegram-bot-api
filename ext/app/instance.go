@@ -7,7 +7,6 @@ import (
 	"github.com/jfk9w-go/flu"
 	"github.com/jfk9w-go/flu/app"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
-	"github.com/jfk9w-go/telegram-bot-api/ext"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -51,11 +50,8 @@ func (app *Instance) GetBot(ctx context.Context) (*telegram.Bot, error) {
 }
 
 func (app *Instance) Run(ctx context.Context) error {
-	global := make(telegram.CommandRegistry).
-		AddFunc("/start", ext.DefaultStart(app.GetVersion()))
-
+	global := make(telegram.CommandRegistry)
 	commands := make(Commands)
-	commands.DefaultStart(app.GetVersion())
 	for _, extension := range app.extensions {
 		id := extension.ID()
 		listener, err := extension.Apply(ctx, app)
@@ -89,6 +85,7 @@ func (app *Instance) Run(ctx context.Context) error {
 		return errors.Wrap(err, "get bot")
 	}
 
+	AddDefaultStart(commands, global, app.GetVersion())
 	if err := commands.Set(ctx, bot); err != nil {
 		return errors.Wrap(err, "set commands")
 	}
