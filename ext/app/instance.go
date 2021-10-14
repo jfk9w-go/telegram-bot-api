@@ -19,8 +19,8 @@ type Instance struct {
 	bot        *telegram.Bot
 }
 
-func Create(version string, clock flu.Clock, config flu.Input) (*Instance, error) {
-	base, err := app.New(version, clock, config, flu.YAML)
+func Create(version string, clock flu.Clock, configurer app.Configurer) (*Instance, error) {
+	base, err := app.New(version, clock, configurer)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func (app *Instance) GetBot(ctx context.Context) (*telegram.Bot, error) {
 	}
 
 	config := new(struct{ Telegram struct{ Token string } })
-	if err := app.GetConfig(config); err != nil {
+	if err := app.GetConfig().As(config); err != nil {
 		return nil, errors.Wrap(err, "get config")
 	}
 
@@ -60,21 +60,23 @@ func (app *Instance) Run(ctx context.Context) error {
 		}
 
 		log := logrus.WithField("extension", id)
-		if listener != nil {
-			local := telegram.CommandRegistryFrom(listener)
+		if listener == nil {
+			log.Warn("disabled")
+			continue
+		}
 
-			scope := Public
-			if scoped, ok := listener.(Scoped); ok {
-				scope = scoped.CommandScope()
-			}
+		local := telegram.CommandRegistryFrom(listener)
+		scope := Public
+		if scoped, ok := listener.(Scoped); ok {
+			scope = scoped.CommandScope()
+		}
 
-			for key, listener := range local {
-				scope.Transform(func(scope telegram.BotCommandScope) { commands.AddAll(scope, key) })
-				global.Add(key, scope.Wrap(listener))
-				log.WithFields(scope.Labels().Map()).
-					WithField("key", key).
-					Infof("registered command")
-			}
+		for key, listener := range local {
+			scope.Transform(func(scope telegram.BotCommandScope) { commands.AddAll(scope, key) })
+			global.Add(key, scope.Wrap(listener))
+			log.WithFields(scope.Labels().Map()).
+				WithField("key", key).
+				Infof("registered command")
 		}
 
 		log.Infof("init ok")

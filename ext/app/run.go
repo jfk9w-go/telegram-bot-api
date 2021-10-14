@@ -8,15 +8,21 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Run(version, environPrefix string, extensions ...Extension) {
-	config, err := app.DefaultConfig(environPrefix, flu.YAML).Collect()
+func RunDefault(version, environPrefix string, extensions ...Extension) {
+	configurer := app.DefaultConfigurer(environPrefix)
+	app, err := Create(version, flu.DefaultClock, configurer)
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
-	app, err := Create(version, flu.DefaultClock, config)
-	if err != nil {
+	Run(app, extensions...)
+}
+
+func Run(app *Instance, extensions ...Extension) {
+	if ok, err := app.Show(); err != nil {
 		logrus.Fatal(err)
+	} else if ok {
+		return
 	}
 
 	defer flu.CloseQuietly(app)
