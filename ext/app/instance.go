@@ -19,7 +19,7 @@ type Instance struct {
 	bot        *telegram.Bot
 }
 
-func Create(version string, clock flu.Clock, config flu.File) (*Instance, error) {
+func Create(version string, clock flu.Clock, config flu.Input) (*Instance, error) {
 	base, err := app.New(version, clock, config, flu.YAML)
 	if err != nil {
 		return nil, err
