@@ -25,6 +25,10 @@ func Create(version string, clock flu.Clock, configurer app.Configurer) (*Instan
 		return nil, err
 	}
 
+	if err := base.ConfigureLogging(); err != nil {
+		return nil, errors.Wrap(err, "configure logging")
+	}
+
 	return &Instance{
 		Base:       base,
 		extensions: make([]Extension, 0),
