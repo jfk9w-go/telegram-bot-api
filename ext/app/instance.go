@@ -95,6 +95,8 @@ func (app *Instance) Run(ctx context.Context) error {
 	}
 
 	app.Manage(bot.CommandListener(global))
+	flu.AwaitSignal()
+
 	return nil
 }
 
