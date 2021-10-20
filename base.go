@@ -11,8 +11,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-type BaseClient func(string) *fluhttp.Request
+// BaseClient represents a flu/http.Request factory.
+type BaseClient func(method string) *fluhttp.Request
 
+// ValidStatusCodes is a slice of valid API HTTP status codes.
 var ValidStatusCodes = []int{
 	http.StatusOK,
 	http.StatusSeeOther,
@@ -24,16 +26,20 @@ var ValidStatusCodes = []int{
 	http.StatusInternalServerError,
 }
 
+// EndpointFunc generates an endpoint for a token and a method.
 type EndpointFunc func(token, method string) string
 
+// DefaultEndpoint is the default EndpointFunc used to call Telegram Bot API.
 var DefaultEndpoint EndpointFunc = func(token, method string) string {
 	return "https://api.telegram.org/bot" + token + "/" + method
 }
 
+// NewBaseClient creates an API client.
 func NewBaseClient(client *fluhttp.Client, token string) BaseClient {
 	return NewBaseClientWithEndpoint(client, token, DefaultEndpoint)
 }
 
+// NewBaseClientWithEndpoint creates an API client with a custom endpoint.
 func NewBaseClientWithEndpoint(client *fluhttp.Client, token string, endpoint EndpointFunc) BaseClient {
 	if token == "" {
 		panic("token must not be empty")

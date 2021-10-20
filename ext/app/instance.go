@@ -11,28 +11,26 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var GormDialects = app.GormDialects
-
 type Instance struct {
 	*app.Base
 	extensions []Extension
 	bot        *telegram.Bot
 }
 
-func Create(version string, clock flu.Clock, configurer app.Configurer) (*Instance, error) {
-	base, err := app.New(version, clock, configurer)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := base.ConfigureLogging(); err != nil {
-		return nil, errors.Wrap(err, "configure logging")
-	}
-
+func Create(version string, clock flu.Clock) *Instance {
 	return &Instance{
-		Base:       base,
+		Base:       app.New(version, clock),
 		extensions: make([]Extension, 0),
-	}, nil
+	}
+}
+
+func (app *Instance) Configure(configurer app.Configurer) error {
+	if err := app.Base.Configure(configurer); err != nil {
+		return err
+	}
+
+	err := app.ConfigureLogging()
+	return errors.Wrap(err, "configure logging")
 }
 
 func (app *Instance) ApplyExtensions(extensions ...Extension) {
