@@ -1,14 +1,14 @@
-package app
+package tapp
 
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
-	"github.com/jfk9w-go/flu/metrics"
-	telegram "github.com/jfk9w-go/telegram-bot-api"
+	"github.com/jfk9w-go/flu/me3x"
+	"github.com/jfk9w-go/telegram-bot-api"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 type Scoped interface {
@@ -74,8 +74,8 @@ func slice(ids map[telegram.ID]bool) []telegram.ID {
 	return slice
 }
 
-func (s CommandScope) Labels() metrics.Labels {
-	labels := metrics.Labels{}
+func (s CommandScope) Labels() me3x.Labels {
+	labels := me3x.Labels{}
 	if s.all {
 		return labels.Add("scope.all", true)
 	}
@@ -144,7 +144,7 @@ func add(sc map[string]string, command, description string) {
 	if strings.HasPrefix(command, "/") {
 		command := command[1:]
 		if _, ok := sc[command]; ok {
-			logrus.Fatalf("duplicate command handler for %s", command)
+			log.Panicf("duplicate command handler for %s", command)
 		}
 
 		sc[command] = description

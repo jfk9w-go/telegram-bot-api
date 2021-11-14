@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/jfk9w-go/flu"
-	fluhttp "github.com/jfk9w-go/flu/http"
+	httpf "github.com/jfk9w-go/flu/httpf"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 	"github.com/jfk9w-go/telegram-bot-api/ext/html"
 	"github.com/jfk9w-go/telegram-bot-api/ext/media"
@@ -189,7 +189,7 @@ func main() {
 
 	logrus.SetLevel(logrus.DebugLevel)
 
-	bot := telegram.NewBot(ctx, fluhttp.NewTransport().
+	bot := telegram.NewBot(ctx, httpf.NewTransport().
 		ResponseHeaderTimeout(2*time.Minute).
 		NewClient(), os.Args[1])
 

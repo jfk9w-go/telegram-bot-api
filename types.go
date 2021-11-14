@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/jfk9w-go/flu"
-	fluhttp "github.com/jfk9w-go/flu/http"
+	httpf "github.com/jfk9w-go/flu/httpf"
 )
 
 // ParseMode is a parse_mode request parameter type.
@@ -177,14 +177,14 @@ func (r MessageRef) kind() string {
 	return "__internal__"
 }
 
-func (r MessageRef) body(form *fluhttp.Form) (flu.EncoderTo, error) {
+func (r MessageRef) body(form *httpf.Form) (flu.EncoderTo, error) {
 	return form.
 		Add("from_chat_id", r.ChatID.queryParam()).
 		Add("message_id", r.ID.queryParam()), nil
 }
 
-func (r MessageRef) form() *fluhttp.Form {
-	return new(fluhttp.Form).
+func (r MessageRef) form() *httpf.Form {
+	return new(httpf.Form).
 		Add("chat_id", r.ChatID.queryParam()).
 		Add("message_id", r.ID.queryParam())
 }

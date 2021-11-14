@@ -1,36 +1,27 @@
-package app
+package tapp
 
 import (
 	"context"
+	"log"
 	"strings"
 
 	"github.com/jfk9w-go/flu"
-	"github.com/jfk9w-go/flu/app"
+	"github.com/jfk9w-go/flu/apfel"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 type Instance struct {
-	*app.Base
+	*apfel.Core
 	extensions []Extension
 	bot        *telegram.Bot
 }
 
 func Create(version string, clock flu.Clock) *Instance {
 	return &Instance{
-		Base:       app.New(version, clock),
+		Core:       apfel.New(version, clock),
 		extensions: make([]Extension, 0),
 	}
-}
-
-func (app *Instance) Configure(configurer app.Configurer) error {
-	if err := app.Base.Configure(configurer); err != nil {
-		return err
-	}
-
-	err := app.ConfigureLogging()
-	return errors.Wrap(err, "configure logging")
 }
 
 func (app *Instance) ApplyExtensions(extensions ...Extension) {
@@ -61,9 +52,8 @@ func (app *Instance) Run(ctx context.Context) error {
 			return errors.Wrapf(err, "apply extension %s", id)
 		}
 
-		log := logrus.WithField("extension", id)
 		if listener == nil {
-			log.Warn("disabled")
+			log.Printf("extension %s disabled", id)
 			continue
 		}
 
@@ -76,12 +66,10 @@ func (app *Instance) Run(ctx context.Context) error {
 		for key, listener := range local {
 			scope.Transform(func(scope telegram.BotCommandScope) { commands.AddAll(scope, key) })
 			global.Add(key, scope.Wrap(listener))
-			log.WithFields(scope.Labels().Map()).
-				WithField("key", key).
-				Infof("registered command")
+			log.Printf("registered command %s%s", key, scope.Labels())
 		}
 
-		log.Infof("init ok")
+		log.Printf("extension %s init ok", id)
 	}
 
 	bot, err := app.GetBot(ctx)

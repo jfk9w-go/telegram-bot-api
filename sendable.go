@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"strconv"
 
-	fluhttp "github.com/jfk9w-go/flu/http"
+	httpf "github.com/jfk9w-go/flu/httpf"
 
 	"github.com/jfk9w-go/flu"
 )
 
 type sendable interface {
 	kind() string
-	body(*fluhttp.Form) (flu.EncoderTo, error)
+	body(*httpf.Form) (flu.EncoderTo, error)
 }
 
 type Sendable interface {
@@ -29,7 +29,7 @@ func (t Text) kind() string {
 	return "message"
 }
 
-func (t Text) body(form *fluhttp.Form) (flu.EncoderTo, error) {
+func (t Text) body(form *httpf.Form) (flu.EncoderTo, error) {
 	return form, nil
 }
 
@@ -119,7 +119,7 @@ func (m Media) kind() string {
 	return string(m.Type)
 }
 
-func (m Media) body(form *fluhttp.Form) (flu.EncoderTo, error) {
+func (m Media) body(form *httpf.Form) (flu.EncoderTo, error) {
 	switch r := m.Input.(type) {
 	case flu.URL:
 		return form.Set(string(m.Type), r.Unmask()), nil
@@ -143,8 +143,8 @@ func (mg MediaGroup) kind() string {
 	return "mediaGroup"
 }
 
-func (mg MediaGroup) body(form *fluhttp.Form) (flu.EncoderTo, error) {
-	var multipart *fluhttp.MultipartForm
+func (mg MediaGroup) body(form *httpf.Form) (flu.EncoderTo, error) {
+	var multipart *httpf.MultipartForm
 	multiparted := false
 	media := make([]mediaJSON, len(mg))
 	for i, m := range mg {

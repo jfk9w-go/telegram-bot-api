@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/jfk9w-go/flu"
-	fluhttp "github.com/jfk9w-go/flu/http"
-	"github.com/jfk9w-go/flu/metrics"
+	"github.com/jfk9w-go/flu/httpf"
+	"github.com/jfk9w-go/flu/me3x"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -25,11 +25,11 @@ type Bot struct {
 	once   sync.Once
 }
 
-func NewBot(ctx context.Context, client *fluhttp.Client, token string) *Bot {
+func NewBot(ctx context.Context, client *httpf.Client, token string) *Bot {
 	return NewBotWithEndpoint(ctx, client, token, nil)
 }
 
-func NewBotWithEndpoint(ctx context.Context, client *fluhttp.Client, token string, endpoint EndpointFunc) *Bot {
+func NewBotWithEndpoint(ctx context.Context, client *httpf.Client, token string, endpoint EndpointFunc) *Bot {
 	base := NewBaseClientWithEndpoint(client, token, endpoint)
 	floodControl := FloodControl(base)
 	conversations := Conversations(floodControl)
@@ -43,8 +43,8 @@ func NewBotWithEndpoint(ctx context.Context, client *fluhttp.Client, token strin
 	}
 }
 
-func (bot *Bot) Labels() metrics.Labels {
-	return metrics.Labels{}.Add("bot", bot.Username())
+func (bot *Bot) Labels() me3x.Labels {
+	return me3x.Labels{}.Add("bot", bot.Username())
 }
 
 func (bot *Bot) log() *logrus.Entry {

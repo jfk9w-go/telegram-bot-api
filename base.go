@@ -7,12 +7,12 @@ import (
 	"strings"
 
 	"github.com/jfk9w-go/flu"
-	fluhttp "github.com/jfk9w-go/flu/http"
+	httpf "github.com/jfk9w-go/flu/httpf"
 	"github.com/pkg/errors"
 )
 
 // BaseClient represents a flu/http.Request factory.
-type BaseClient func(method string) *fluhttp.Request
+type BaseClient func(method string) *httpf.Request
 
 // ValidStatusCodes is a slice of valid API HTTP status codes.
 var ValidStatusCodes = []int{
@@ -35,23 +35,23 @@ var DefaultEndpoint EndpointFunc = func(token, method string) string {
 }
 
 // NewBaseClient creates an API client.
-func NewBaseClient(client *fluhttp.Client, token string) BaseClient {
+func NewBaseClient(client *httpf.Client, token string) BaseClient {
 	return NewBaseClientWithEndpoint(client, token, DefaultEndpoint)
 }
 
 // NewBaseClientWithEndpoint creates an API client with a custom endpoint.
-func NewBaseClientWithEndpoint(client *fluhttp.Client, token string, endpoint EndpointFunc) BaseClient {
+func NewBaseClientWithEndpoint(client *httpf.Client, token string, endpoint EndpointFunc) BaseClient {
 	if token == "" {
 		panic("token must not be empty")
 	}
 	if client == nil {
-		client = fluhttp.NewClient(http.DefaultClient)
+		client = httpf.NewClient(http.DefaultClient)
 	}
 	client = client.AcceptStatus(ValidStatusCodes...)
 	if endpoint == nil {
 		endpoint = DefaultEndpoint
 	}
-	return func(method string) *fluhttp.Request { return client.POST(endpoint(token, method)) }
+	return func(method string) *httpf.Request { return client.POST(endpoint(token, method)) }
 }
 
 // GetUpdates is used to receive incoming updates using long polling.
@@ -136,7 +136,7 @@ func (c BaseClient) EditMessageReplyMarkup(ctx context.Context, ref MessageRef, 
 }
 
 func (c BaseClient) ExportChatInviteLink(ctx context.Context, chatID ChatID) (string, error) {
-	body := new(fluhttp.Form).
+	body := new(httpf.Form).
 		Set("chat_id", chatID.queryParam())
 	var inviteLink string
 	return inviteLink, c.Execute(ctx, "exportChatInviteLink", body, &inviteLink)
@@ -147,7 +147,7 @@ func (c BaseClient) ExportChatInviteLink(ctx context.Context, chatID ChatID) (st
 // Returns a Chat object on success.
 // See https://core.telegram.org/bots/api#getchat
 func (c BaseClient) GetChat(ctx context.Context, chatID ChatID) (*Chat, error) {
-	body := new(fluhttp.Form).
+	body := new(httpf.Form).
 		Set("chat_id", chatID.queryParam())
 	chat := new(Chat)
 	return chat, c.Execute(ctx, "getChat", body, chat)
@@ -159,14 +159,14 @@ func (c BaseClient) GetChat(ctx context.Context, chatID ChatID) (*Chat, error) {
 // no administrators were appointed, only the creator will be returned.
 // See https://core.telegram.org/bots/api#getchatadministrators
 func (c BaseClient) GetChatAdministrators(ctx context.Context, chatID ChatID) ([]ChatMember, error) {
-	body := new(fluhttp.Form).
+	body := new(httpf.Form).
 		Set("chat_id", chatID.queryParam())
 	members := make([]ChatMember, 0)
 	return members, c.Execute(ctx, "getChatAdministrators", body, &members)
 }
 
 func (c BaseClient) GetChatMemberCount(ctx context.Context, chatID ChatID) (int64, error) {
-	body := new(fluhttp.Form).
+	body := new(httpf.Form).
 		Set("chat_id", chatID.queryParam())
 
 	var count int64
@@ -177,7 +177,7 @@ func (c BaseClient) GetChatMemberCount(ctx context.Context, chatID ChatID) (int6
 // Returns a ChatMember object on success.
 // See https://core.telegram.org/bots/api#getchatmember
 func (c BaseClient) GetChatMember(ctx context.Context, chatID ChatID, userID ID) (*ChatMember, error) {
-	body := new(fluhttp.Form).
+	body := new(httpf.Form).
 		Set("chat_id", chatID.queryParam()).
 		Set("user_id", userID.queryParam())
 	member := new(ChatMember)

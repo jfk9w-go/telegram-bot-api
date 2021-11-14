@@ -3,7 +3,7 @@ package telegram
 import (
 	"encoding/json"
 
-	fluhttp "github.com/jfk9w-go/flu/http"
+	httpf "github.com/jfk9w-go/flu/httpf"
 
 	"github.com/jfk9w-go/flu"
 	"github.com/pkg/errors"
@@ -37,7 +37,7 @@ type SendOptions struct {
 
 func (o *SendOptions) body(chatID ChatID, item sendable) (flu.EncoderTo, error) {
 	mediaGroup := item.kind() == "mediaGroup"
-	form := new(fluhttp.Form)
+	form := new(httpf.Form)
 	if !mediaGroup {
 		form = form.Value(item)
 	}
@@ -67,7 +67,7 @@ type CopyOptions struct {
 }
 
 func (o *CopyOptions) body(chatID ChatID, ref MessageRef) (flu.EncoderTo, error) {
-	form := new(fluhttp.Form).Value(o)
+	form := new(httpf.Form).Value(o)
 	form.Add("chat_id", chatID.queryParam())
 	return ref.body(form)
 }
@@ -80,5 +80,5 @@ type AnswerOptions struct {
 }
 
 func (o *AnswerOptions) body(id string) flu.EncoderTo {
-	return new(fluhttp.Form).Value(o).Add("callback_query_id", id)
+	return new(httpf.Form).Value(o).Add("callback_query_id", id)
 }

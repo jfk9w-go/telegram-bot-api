@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/jfk9w-go/flu/metrics"
+	"github.com/jfk9w-go/flu/me3x"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -75,8 +75,8 @@ func (cmd *Command) Reply(ctx context.Context, client Client, text string) error
 	return err
 }
 
-func (cmd *Command) Labels() metrics.Labels {
-	return metrics.Labels{}.
+func (cmd *Command) Labels() me3x.Labels {
+	return me3x.Labels{}.
 		Add("chat", cmd.Chat.ID).
 		Add("user", cmd.User.ID).
 		Add("command", cmd.Key).
