@@ -71,20 +71,20 @@ func (bot *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 			default:
 				for _, update := range updates {
 					if update.Message != nil && update.Message.ReplyToMessage != nil {
-						if err := bot.Answer(ctx, update.Message); err != nil {
-							if flu.IsContextRelated(err) {
-								return
-							}
-
+						if err := bot.Answer(ctx, update.Message); err == nil {
+							continue
+						} else if flu.IsContextRelated(err) {
+							return
+						} else {
 							bot.log().Warnf("answer %d: %s", update.Message.ID, err)
 						}
-					} else {
-						select {
-						case <-ctx.Done():
-							return
-						case channel <- update:
-							break
-						}
+					}
+
+					select {
+					case <-ctx.Done():
+						return
+					case channel <- update:
+						break
 					}
 
 					options.Offset = update.ID.Increment()
