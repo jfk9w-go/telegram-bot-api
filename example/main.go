@@ -7,10 +7,8 @@ import (
 	"os"
 	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/jfk9w-go/flu"
-	httpf "github.com/jfk9w-go/flu/httpf"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 	"github.com/jfk9w-go/telegram-bot-api/ext/html"
 	"github.com/jfk9w-go/telegram-bot-api/ext/media"
@@ -170,10 +168,6 @@ func (l CommandListener) Question(ctx context.Context, client telegram.Client, c
 	return nil
 }
 
-func (l CommandListener) CommandRegistry() map[string]telegram.CommandListener {
-	return telegram.CommandRegistryFrom(l)
-}
-
 // This is an example bot which has three commands:
 //   /greet - reply with "Hello, %username%"
 //   /count n - count from 1 till n
@@ -189,9 +183,7 @@ func main() {
 
 	logrus.SetLevel(logrus.DebugLevel)
 
-	bot := telegram.NewBot(ctx, httpf.NewTransport().
-		ResponseHeaderTimeout(2*time.Minute).
-		NewClient(), os.Args[1])
+	bot := telegram.NewBot(ctx, nil, os.Args[1])
 
 	defer flu.CloseQuietly(
 		bot.CommandListener(CommandListener{
@@ -200,5 +192,5 @@ func main() {
 	)
 
 	logrus.Infof("bot username: %s", bot.Username())
-	flu.AwaitSignal(syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
+	flu.AwaitSignal(ctx, syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
 }

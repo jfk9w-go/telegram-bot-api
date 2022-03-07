@@ -170,7 +170,7 @@ func (mg MediaGroup) body(form *httpf.Form) (flu.EncoderTo, error) {
 	if err != nil {
 		return nil, err
 	}
-	form = form.Add("media", string(bytes))
+	form = form.Set("media", string(bytes))
 	if multiparted {
 		return multipart, nil
 	}

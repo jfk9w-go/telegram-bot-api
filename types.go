@@ -179,14 +179,14 @@ func (r MessageRef) kind() string {
 
 func (r MessageRef) body(form *httpf.Form) (flu.EncoderTo, error) {
 	return form.
-		Add("from_chat_id", r.ChatID.queryParam()).
-		Add("message_id", r.ID.queryParam()), nil
+		Set("from_chat_id", r.ChatID.queryParam()).
+		Set("message_id", r.ID.queryParam()), nil
 }
 
 func (r MessageRef) form() *httpf.Form {
 	return new(httpf.Form).
-		Add("chat_id", r.ChatID.queryParam()).
-		Add("message_id", r.ID.queryParam())
+		Set("chat_id", r.ChatID.queryParam()).
+		Set("message_id", r.ID.queryParam())
 }
 
 func (r ForceReply) self() ReplyMarkup {

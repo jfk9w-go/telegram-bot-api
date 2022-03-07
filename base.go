@@ -3,8 +3,10 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jfk9w-go/flu"
 	httpf "github.com/jfk9w-go/flu/httpf"
@@ -12,7 +14,10 @@ import (
 )
 
 // BaseClient represents a flu/http.Request factory.
-type BaseClient func(method string) *httpf.Request
+type BaseClient struct {
+	client   *http.Client
+	endpoint EndpointFunc
+}
 
 // ValidStatusCodes is a slice of valid API HTTP status codes.
 var ValidStatusCodes = []int{
@@ -27,31 +32,33 @@ var ValidStatusCodes = []int{
 }
 
 // EndpointFunc generates an endpoint for a token and a method.
-type EndpointFunc func(token, method string) string
+type EndpointFunc func(method string) string
 
-// DefaultEndpoint is the default EndpointFunc used to call Telegram Bot API.
-var DefaultEndpoint EndpointFunc = func(token, method string) string {
-	return "https://api.telegram.org/bot" + token + "/" + method
+func DefaultEndpoint(token string) EndpointFunc {
+	if token == "" {
+		log.Panicf("telegram bot api token must not be empty")
+	}
+
+	return func(method string) string { return "https://api.telegram.org/bot" + token + "/" + method }
 }
 
 // NewBaseClient creates an API client.
-func NewBaseClient(client *httpf.Client, token string) BaseClient {
-	return NewBaseClientWithEndpoint(client, token, DefaultEndpoint)
+func NewBaseClient(client *http.Client, token string) *BaseClient {
+	return NewBaseClientWithEndpoint(client, DefaultEndpoint(token))
 }
 
 // NewBaseClientWithEndpoint creates an API client with a custom endpoint.
-func NewBaseClientWithEndpoint(client *httpf.Client, token string, endpoint EndpointFunc) BaseClient {
-	if token == "" {
-		panic("token must not be empty")
-	}
+func NewBaseClientWithEndpoint(client *http.Client, endpoint EndpointFunc) *BaseClient {
 	if client == nil {
-		client = httpf.NewClient(http.DefaultClient)
+		transport := httpf.NewDefaultTransport()
+		transport.ResponseHeaderTimeout = 2 * time.Minute
+		client = &http.Client{Transport: transport}
 	}
-	client = client.AcceptStatus(ValidStatusCodes...)
-	if endpoint == nil {
-		endpoint = DefaultEndpoint
+
+	return &BaseClient{
+		client:   client,
+		endpoint: endpoint,
 	}
-	return func(method string) *httpf.Request { return client.POST(endpoint(token, method)) }
 }
 
 // GetUpdates is used to receive incoming updates using long polling.
@@ -249,10 +256,9 @@ func (c BaseClient) DeleteMyCommands(ctx context.Context, scope *BotCommandScope
 }
 
 func (c BaseClient) Execute(ctx context.Context, method string, body flu.EncoderTo, resp interface{}) error {
-	return c(method).
-		BodyEncoder(body).
-		Context(ctx).
-		Execute().
+	return httpf.POST(c.endpoint(method), body).
+		Exchange(ctx, c.client).
 		DecodeBody(newResponse(resp)).
-		Error
+		CheckStatus(ValidStatusCodes...).
+		Error()
 }

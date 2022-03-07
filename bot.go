@@ -3,19 +3,19 @@ package telegram
 import (
 	"context"
 	"encoding/base64"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/jfk9w-go/flu"
-	"github.com/jfk9w-go/flu/httpf"
 	"github.com/jfk9w-go/flu/me3x"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 type Bot struct {
-	BaseClient
+	*BaseClient
 	*FloodControlAware
 	*ConversationAware
 	ctx    context.Context
@@ -25,12 +25,12 @@ type Bot struct {
 	once   sync.Once
 }
 
-func NewBot(ctx context.Context, client *httpf.Client, token string) *Bot {
-	return NewBotWithEndpoint(ctx, client, token, nil)
+func NewBot(ctx context.Context, client *http.Client, token string) *Bot {
+	return NewBotWithEndpoint(ctx, client, DefaultEndpoint(token))
 }
 
-func NewBotWithEndpoint(ctx context.Context, client *httpf.Client, token string, endpoint EndpointFunc) *Bot {
-	base := NewBaseClientWithEndpoint(client, token, endpoint)
+func NewBotWithEndpoint(ctx context.Context, client *http.Client, endpoint EndpointFunc) *Bot {
+	base := NewBaseClientWithEndpoint(client, endpoint)
 	floodControl := FloodControl(base)
 	conversations := Conversations(floodControl)
 	ctx, cancel := context.WithCancel(ctx)

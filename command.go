@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"unicode"
 
 	"github.com/jfk9w-go/flu/me3x"
 	"github.com/pkg/errors"
@@ -171,7 +172,7 @@ func CommandRegistryFrom(value interface{}) CommandRegistry {
 		for i := 0; i < elemType.NumMethod(); i++ {
 			method := elemType.Method(i)
 			methodType := method.Type
-			if method.IsExported() && methodType.NumIn() == 4 && methodType.NumOut() == 1 &&
+			if unicode.IsUpper([]rune(method.Name)[0]) && methodType.NumIn() == 4 && methodType.NumOut() == 1 &&
 				methodType.In(1).AssignableTo(reflect.TypeOf(new(context.Context)).Elem()) &&
 				methodType.In(2).AssignableTo(reflect.TypeOf(new(Client)).Elem()) &&
 				methodType.In(3).AssignableTo(reflect.TypeOf(new(Command))) &&

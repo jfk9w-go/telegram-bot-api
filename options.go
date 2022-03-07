@@ -37,10 +37,13 @@ type SendOptions struct {
 
 func (o *SendOptions) body(chatID ChatID, item sendable) (flu.EncoderTo, error) {
 	mediaGroup := item.kind() == "mediaGroup"
-	form := new(httpf.Form)
+	var form *httpf.Form
 	if !mediaGroup {
-		form = form.Value(item)
+		form = httpf.FormValue(item)
+	} else {
+		form = new(httpf.Form)
 	}
+
 	form = form.Set("chat_id", chatID.queryParam())
 	if o != nil {
 		if o.DisableNotification {
@@ -67,8 +70,8 @@ type CopyOptions struct {
 }
 
 func (o *CopyOptions) body(chatID ChatID, ref MessageRef) (flu.EncoderTo, error) {
-	form := new(httpf.Form).Value(o)
-	form.Add("chat_id", chatID.queryParam())
+	form := httpf.FormValue(o)
+	form.Set("chat_id", chatID.queryParam())
 	return ref.body(form)
 }
 
@@ -80,5 +83,5 @@ type AnswerOptions struct {
 }
 
 func (o *AnswerOptions) body(id string) flu.EncoderTo {
-	return new(httpf.Form).Value(o).Add("callback_query_id", id)
+	return httpf.FormValue(o).Set("callback_query_id", id)
 }
