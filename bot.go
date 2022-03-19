@@ -70,6 +70,7 @@ func (bot *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 
 			default:
 				for _, update := range updates {
+					options.Offset = update.ID.Increment()
 					if update.Message != nil && update.Message.ReplyToMessage != nil {
 						if err := bot.Answer(ctx, update.Message); err == nil {
 							continue
@@ -86,8 +87,6 @@ func (bot *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 					case channel <- update:
 						break
 					}
-
-					options.Offset = update.ID.Increment()
 				}
 			}
 		}
