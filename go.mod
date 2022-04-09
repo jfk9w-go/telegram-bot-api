@@ -1,7 +1,7 @@
 module github.com/jfk9w-go/telegram-bot-api
 
 require (
-	github.com/jfk9w-go/flu v0.10.5
+	github.com/jfk9w-go/flu v0.10.6
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/exp v0.0.0-20220407100705-7b9b53b0aca4
