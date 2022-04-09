@@ -3,20 +3,35 @@ package telegram
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strings"
-	"time"
+
+	"github.com/jfk9w-go/flu/logf"
 
 	"github.com/jfk9w-go/flu"
 	httpf "github.com/jfk9w-go/flu/httpf"
 	"github.com/pkg/errors"
 )
 
-// BaseClient represents a flu/http.Request factory.
-type BaseClient struct {
-	client   *http.Client
-	endpoint EndpointFunc
+const rootLoggerName = "tgbot"
+
+func ShortenToken(token string) string {
+	if len(token) > 10 {
+		token = token[:10]
+	}
+
+	return strings.Trim(token, ":\\/_")
+}
+
+// baseClient represents a flu/http.Request factory.
+type baseClient struct {
+	client   httpf.Client
+	endpoint endpointFunc
+	id       string
+}
+
+func (c *baseClient) String() string {
+	return c.id
 }
 
 // ValidStatusCodes is a slice of valid API HTTP status codes.
@@ -31,40 +46,12 @@ var ValidStatusCodes = []int{
 	http.StatusInternalServerError,
 }
 
-// EndpointFunc generates an endpoint for a token and a method.
-type EndpointFunc func(method string) string
-
-func DefaultEndpoint(token string) EndpointFunc {
-	if token == "" {
-		log.Panicf("telegram bot api token must not be empty")
-	}
-
-	return func(method string) string { return "https://api.telegram.org/bot" + token + "/" + method }
-}
-
-// NewBaseClient creates an API client.
-func NewBaseClient(client *http.Client, token string) *BaseClient {
-	return NewBaseClientWithEndpoint(client, DefaultEndpoint(token))
-}
-
-// NewBaseClientWithEndpoint creates an API client with a custom endpoint.
-func NewBaseClientWithEndpoint(client *http.Client, endpoint EndpointFunc) *BaseClient {
-	if client == nil {
-		transport := httpf.NewDefaultTransport()
-		transport.ResponseHeaderTimeout = 2 * time.Minute
-		client = &http.Client{Transport: transport}
-	}
-
-	return &BaseClient{
-		client:   client,
-		endpoint: endpoint,
-	}
-}
+type endpointFunc func(method string) string
 
 // GetUpdates is used to receive incoming updates using long polling.
 // An Array of Update objects is returned.
 // See https://core.telegram.org/bots/api#getupdates
-func (c BaseClient) GetUpdates(ctx context.Context, options GetUpdatesOptions) ([]Update, error) {
+func (c *baseClient) GetUpdates(ctx context.Context, options GetUpdatesOptions) ([]Update, error) {
 	updates := make([]Update, 0)
 	return updates, c.Execute(ctx, "getUpdates", flu.JSON(options), &updates)
 }
@@ -72,12 +59,12 @@ func (c BaseClient) GetUpdates(ctx context.Context, options GetUpdatesOptions) (
 // GetMe is a simple method for testing your bot's auth token. Requires no parameters.
 // Returns basic information about the bot in form of a User object.
 // See https://core.telegram.org/bots/api#getme
-func (c BaseClient) GetMe(ctx context.Context) (*User, error) {
+func (c *baseClient) GetMe(ctx context.Context) (*User, error) {
 	user := new(User)
 	return user, c.Execute(ctx, "getMe", nil, user)
 }
 
-func (c BaseClient) ForwardMessage(ctx context.Context, chatID ChatID, ref MessageRef, options *SendOptions) (ID, error) {
+func (c *baseClient) ForwardMessage(ctx context.Context, chatID ChatID, ref MessageRef, options *SendOptions) (ID, error) {
 	var messageID ID
 	form, err := options.body(chatID, ref)
 	if err != nil {
@@ -87,7 +74,7 @@ func (c BaseClient) ForwardMessage(ctx context.Context, chatID ChatID, ref Messa
 	return messageID, c.Execute(ctx, "forwardMessage", form, &messageID)
 }
 
-func (c BaseClient) CopyMessage(ctx context.Context, chatID ChatID, ref MessageRef, options *CopyOptions) (ID, error) {
+func (c *baseClient) CopyMessage(ctx context.Context, chatID ChatID, ref MessageRef, options *CopyOptions) (ID, error) {
 	var resp struct {
 		MessageID ID `json:"message_id"`
 	}
@@ -109,7 +96,7 @@ func (c BaseClient) CopyMessage(ctx context.Context, chatID ChatID, ref MessageR
 // Returns True on success.
 // See
 //    https://core.telegram.org/bots/api#deletemessage
-func (c BaseClient) DeleteMessage(ctx context.Context, ref MessageRef) error {
+func (c *baseClient) DeleteMessage(ctx context.Context, ref MessageRef) error {
 	var ok bool
 	if err := c.Execute(ctx, "deleteMessage", ref.form(), &ok); err != nil {
 		return err
@@ -122,7 +109,7 @@ func (c BaseClient) DeleteMessage(ctx context.Context, ref MessageRef) error {
 	return nil
 }
 
-func (c BaseClient) EditMessageReplyMarkup(ctx context.Context, ref MessageRef, markup ReplyMarkup) (*Message, error) {
+func (c *baseClient) EditMessageReplyMarkup(ctx context.Context, ref MessageRef, markup ReplyMarkup) (*Message, error) {
 	markupJSON, err := json.Marshal(markup)
 	if err != nil {
 		return nil, err
@@ -142,7 +129,7 @@ func (c BaseClient) EditMessageReplyMarkup(ctx context.Context, ref MessageRef, 
 	return message, nil
 }
 
-func (c BaseClient) ExportChatInviteLink(ctx context.Context, chatID ChatID) (string, error) {
+func (c *baseClient) ExportChatInviteLink(ctx context.Context, chatID ChatID) (string, error) {
 	body := new(httpf.Form).
 		Set("chat_id", chatID.queryParam())
 	var inviteLink string
@@ -153,7 +140,7 @@ func (c BaseClient) ExportChatInviteLink(ctx context.Context, chatID ChatID) (st
 // the user for one-on-one conversations, current username of a user, group or updateChannel, etc.).
 // Returns a Chat object on success.
 // See https://core.telegram.org/bots/api#getchat
-func (c BaseClient) GetChat(ctx context.Context, chatID ChatID) (*Chat, error) {
+func (c *baseClient) GetChat(ctx context.Context, chatID ChatID) (*Chat, error) {
 	body := new(httpf.Form).
 		Set("chat_id", chatID.queryParam())
 	chat := new(Chat)
@@ -165,14 +152,14 @@ func (c BaseClient) GetChat(ctx context.Context, chatID ChatID) (*Chat, error) {
 // all chat administrators except other bots. If the chat is a group or a supergroup and
 // no administrators were appointed, only the creator will be returned.
 // See https://core.telegram.org/bots/api#getchatadministrators
-func (c BaseClient) GetChatAdministrators(ctx context.Context, chatID ChatID) ([]ChatMember, error) {
+func (c *baseClient) GetChatAdministrators(ctx context.Context, chatID ChatID) ([]ChatMember, error) {
 	body := new(httpf.Form).
 		Set("chat_id", chatID.queryParam())
 	members := make([]ChatMember, 0)
 	return members, c.Execute(ctx, "getChatAdministrators", body, &members)
 }
 
-func (c BaseClient) GetChatMemberCount(ctx context.Context, chatID ChatID) (int64, error) {
+func (c *baseClient) GetChatMemberCount(ctx context.Context, chatID ChatID) (int64, error) {
 	body := new(httpf.Form).
 		Set("chat_id", chatID.queryParam())
 
@@ -183,7 +170,7 @@ func (c BaseClient) GetChatMemberCount(ctx context.Context, chatID ChatID) (int6
 // GetChatMember is used to get information about a member of a chat.
 // Returns a ChatMember object on success.
 // See https://core.telegram.org/bots/api#getchatmember
-func (c BaseClient) GetChatMember(ctx context.Context, chatID ChatID, userID ID) (*ChatMember, error) {
+func (c *baseClient) GetChatMember(ctx context.Context, chatID ChatID, userID ID) (*ChatMember, error) {
 	body := new(httpf.Form).
 		Set("chat_id", chatID.queryParam()).
 		Set("user_id", userID.queryParam())
@@ -195,7 +182,7 @@ func (c BaseClient) GetChatMember(ctx context.Context, chatID ChatID, userID ID)
 // The answer will be displayed to the user as a notification at the top of the chat screen or as an alert.
 // On success, True is returned.
 // https://core.telegram.org/bots/api#answercallbackquery
-func (c BaseClient) AnswerCallbackQuery(ctx context.Context, id string, options *AnswerOptions) error {
+func (c *baseClient) AnswerCallbackQuery(ctx context.Context, id string, options *AnswerOptions) error {
 	var ok bool
 	if err := c.Execute(ctx, "answerCallbackQuery", options.body(id), &ok); err != nil {
 		return err
@@ -208,7 +195,7 @@ func (c BaseClient) AnswerCallbackQuery(ctx context.Context, id string, options 
 	return nil
 }
 
-func (c BaseClient) SetMyCommands(ctx context.Context, scope *BotCommandScope, commands []BotCommand) error {
+func (c *baseClient) SetMyCommands(ctx context.Context, scope *BotCommandScope, commands []BotCommand) error {
 	type request struct {
 		Commands []BotCommand     `json:"commands"`
 		Scope    *BotCommandScope `json:"scope,omitempty"`
@@ -227,7 +214,7 @@ func (c BaseClient) SetMyCommands(ctx context.Context, scope *BotCommandScope, c
 	return nil
 }
 
-func (c BaseClient) GetMyCommands(ctx context.Context, scope *BotCommandScope) ([]BotCommand, error) {
+func (c *baseClient) GetMyCommands(ctx context.Context, scope *BotCommandScope) ([]BotCommand, error) {
 	type request struct {
 		Scope *BotCommandScope `json:"scope,omitempty"`
 	}
@@ -237,7 +224,7 @@ func (c BaseClient) GetMyCommands(ctx context.Context, scope *BotCommandScope) (
 	return resp, c.Execute(ctx, "getMyCommands", flu.JSON(req), &resp)
 }
 
-func (c BaseClient) DeleteMyCommands(ctx context.Context, scope *BotCommandScope) error {
+func (c *baseClient) DeleteMyCommands(ctx context.Context, scope *BotCommandScope) error {
 	type request struct {
 		Scope *BotCommandScope `json:"scope,omitempty"`
 	}
@@ -255,10 +242,12 @@ func (c BaseClient) DeleteMyCommands(ctx context.Context, scope *BotCommandScope
 	return nil
 }
 
-func (c BaseClient) Execute(ctx context.Context, method string, body flu.EncoderTo, resp interface{}) error {
-	return httpf.POST(c.endpoint(method), body).
+func (c *baseClient) Execute(ctx context.Context, method string, body flu.EncoderTo, resp interface{}) error {
+	err := httpf.POST(c.endpoint(method), body).
 		Exchange(ctx, c.client).
 		DecodeBody(newResponse(resp)).
 		CheckStatus(ValidStatusCodes...).
 		Error()
+	logf.Get(c).Resultf(ctx, logf.Trace, logf.Warn, "execute %s: %v", method, err)
+	return err
 }

@@ -3,7 +3,8 @@ package telegram
 import (
 	"context"
 
-	"github.com/jfk9w-go/flu"
+	"github.com/jfk9w-go/flu/syncf"
+
 	"github.com/pkg/errors"
 )
 
@@ -17,32 +18,36 @@ type Sender interface {
 	Send(ctx context.Context, chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error)
 }
 
-type ConversationAware struct {
+type conversationAware struct {
 	sender    Sender
 	questions map[ID]Question
-	mu        flu.RWMutex
+	mu        syncf.RWMutex
 }
 
-func Conversations(sender Sender) *ConversationAware {
-	return &ConversationAware{
+func conversations(sender Sender) *conversationAware {
+	return &conversationAware{
 		sender:    sender,
 		questions: make(map[ID]Question),
 	}
 }
 
-func (c *ConversationAware) Ask(ctx context.Context, chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error) {
+func (a *conversationAware) Ask(ctx context.Context, chatID ChatID, sendable Sendable, options *SendOptions) (*Message, error) {
 	if options == nil {
 		options = new(SendOptions)
 	}
 
 	options.ReplyMarkup = ForceReply{ForceReply: true, Selective: true}
-	m, err := c.sender.Send(ctx, chatID, sendable, options)
+	m, err := a.sender.Send(ctx, chatID, sendable, options)
 	if err != nil {
 		return nil, errors.Wrap(err, "send question")
 	}
 
-	question := c.addQuestion(m.ID)
-	defer c.removeQuestion(m.ID)
+	question, err := a.addQuestion(ctx, m.ID)
+	if err != nil {
+		return nil, errors.Wrap(err, "add question")
+	}
+
+	defer a.removeQuestion(ctx, m.ID)
 
 	select {
 	case <-ctx.Done():
@@ -52,9 +57,14 @@ func (c *ConversationAware) Ask(ctx context.Context, chatID ChatID, sendable Sen
 	}
 }
 
-func (c *ConversationAware) Answer(ctx context.Context, message *Message) error {
-	defer c.mu.RLock().Unlock()
-	question, ok := c.questions[message.ReplyToMessage.ID]
+func (a *conversationAware) Answer(ctx context.Context, message *Message) error {
+	ctx, cancel := a.mu.RLock(ctx)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	defer cancel()
+	question, ok := a.questions[message.ReplyToMessage.ID]
 	if !ok {
 		return ErrUnexpectedAnswer
 	}
@@ -67,16 +77,29 @@ func (c *ConversationAware) Answer(ctx context.Context, message *Message) error 
 	}
 }
 
-func (c *ConversationAware) addQuestion(id ID) Question {
+func (a *conversationAware) addQuestion(ctx context.Context, id ID) (Question, error) {
 	question := make(Question)
-	c.mu.Lock()
-	c.questions[id] = question
-	c.mu.Unlock()
-	return question
+	ctx, cancel := a.mu.Lock(ctx)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	defer cancel()
+
+	if a.questions == nil {
+		a.questions = make(map[ID]Question)
+	}
+
+	a.questions[id] = question
+	return question, nil
 }
 
-func (c *ConversationAware) removeQuestion(id ID) {
-	c.mu.Lock()
-	delete(c.questions, id)
-	c.mu.Unlock()
+func (a *conversationAware) removeQuestion(ctx context.Context, id ID) {
+	ctx, cancel := a.mu.Lock(ctx)
+	if ctx.Err() != nil {
+		return
+	}
+
+	defer cancel()
+	delete(a.questions, id)
 }

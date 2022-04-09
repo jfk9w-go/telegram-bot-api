@@ -6,8 +6,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/jfk9w-go/flu/syncf"
+
 	telegram "github.com/jfk9w-go/telegram-bot-api"
-	"github.com/jfk9w-go/telegram-bot-api/ext/media"
 	"github.com/jfk9w-go/telegram-bot-api/ext/receiver"
 	"golang.org/x/exp/utf8string"
 )
@@ -108,7 +109,7 @@ func (o *Paged) WriteUnbreakable(ctx context.Context, text string) error {
 	return nil
 }
 
-func (o *Paged) AddMedia(ctx context.Context, ref media.Ref, anchor string, collapsible bool) error {
+func (o *Paged) AddMedia(ctx context.Context, ref syncf.Future[*receiver.Media], anchor string, collapsible bool) error {
 	if o.overflown {
 		return nil
 	}

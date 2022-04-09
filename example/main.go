@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	_ "net/http/pprof"
 	"os"
@@ -9,30 +10,23 @@ import (
 	"syscall"
 
 	"github.com/jfk9w-go/flu"
+	"github.com/jfk9w-go/flu/logf"
+	"github.com/jfk9w-go/flu/syncf"
 	telegram "github.com/jfk9w-go/telegram-bot-api"
 	"github.com/jfk9w-go/telegram-bot-api/ext/html"
-	"github.com/jfk9w-go/telegram-bot-api/ext/media"
 	"github.com/jfk9w-go/telegram-bot-api/ext/output"
 	"github.com/jfk9w-go/telegram-bot-api/ext/receiver"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
-const LoremIpsum = `
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Cras semper auctor neque vitae tempus quam pellentesque nec nam. Id diam vel quam elementum pulvinar etiam. Pellentesque eu tincidunt tortor aliquam nulla facilisi cras fermentum. Sagittis id consectetur purus ut faucibus pulvinar elementum integer. Rutrum tellus pellentesque eu tincidunt tortor aliquam. Varius morbi enim nunc faucibus a pellentesque. Pellentesque pulvinar pellentesque habitant morbi. In vitae turpis massa sed elementum tempus. Integer eget aliquet nibh praesent tristique. Pharetra sit amet aliquam id diam maecenas ultricies. Bibendum neque egestas congue quisque egestas diam in arcu cursus. Sed augue lacus viverra vitae congue eu consequat ac. Tempor nec feugiat nisl pretium fusce id velit ut. Sit amet massa vitae tortor condimentum. Lorem ipsum dolor sit amet consectetur. Proin libero nunc consequat interdum varius sit. Dui faucibus in ornare quam viverra orci. Non pulvinar neque laoreet suspendisse interdum. Maecenas pharetra convallis posuere morbi leo.
-
-Mollis aliquam ut porttitor leo a diam sollicitudin. Donec massa sapien faucibus et molestie ac. Dolor sed viverra ipsum nunc aliquet bibendum enim facilisis. Ut pharetra sit amet aliquam id. Arcu risus quis varius quam quisque id. Et ultrices neque ornare aenean euismod elementum nisi. Velit dignissim sodales ut eu sem integer vitae justo. Venenatis tellus in metus vulputate eu scelerisque felis imperdiet proin. Scelerisque purus semper eget duis at tellus at urna condimentum. Mauris in aliquam sem fringilla ut morbi tincidunt augue. Sit amet consectetur adipiscing elit duis tristique sollicitudin nibh sit. Et malesuada fames ac turpis egestas. Ac orci phasellus egestas tellus rutrum tellus pellentesque eu tincidunt. Cras semper auctor neque vitae tempus quam pellentesque. Odio aenean sed adipiscing diam donec adipiscing tristique risus nec. Sem nulla pharetra diam sit amet. In fermentum posuere urna nec tincidunt.
-
-Fusce id velit ut tortor pretium viverra suspendisse potenti nullam. Non odio euismod lacinia at quis risus. In eu mi bibendum neque egestas. Congue quisque egestas diam in arcu cursus. Donec pretium vulputate sapien nec sagittis aliquam. A iaculis at erat pellentesque adipiscing commodo elit. Metus aliquam eleifend mi in nulla posuere sollicitudin aliquam. Hendrerit gravida rutrum quisque non tellus. Sit amet justo donec enim. Egestas congue quisque egestas diam in arcu cursus euismod quis. Lectus vestibulum mattis ullamcorper velit sed ullamcorper morbi tincidunt ornare. Turpis in eu mi bibendum neque. Ac orci phasellus egestas tellus rutrum tellus pellentesque eu. Rutrum quisque non tellus orci ac. Sociis natoque penatibus et magnis dis parturient montes. Laoreet sit amet cursus sit. Sit amet aliquam id diam maecenas ultricies mi.
-
-Quis vel eros donec ac odio tempor orci dapibus. Senectus et netus et malesuada fames ac turpis egestas integer. Ultricies integer quis auctor elit. Molestie at elementum eu facilisis sed odio morbi. Viverra adipiscing at in tellus integer feugiat scelerisque varius. Orci sagittis eu volutpat odio facilisis mauris sit amet massa. Mi proin sed libero enim sed faucibus. Sed viverra ipsum nunc aliquet bibendum enim facilisis gravida neque. Turpis tincidunt id aliquet risus feugiat in ante. Nec ultrices dui sapien eget mi proin sed. Ac tincidunt vitae semper quis lectus nulla at. Eget nunc lobortis mattis aliquam. Molestie at elementum eu facilisis sed odio morbi quis. Nibh cras pulvinar mattis nunc sed blandit libero. Habitant morbi tristique senectus et. Leo a diam sollicitudin tempor id eu nisl. Adipiscing commodo elit at imperdiet dui accumsan. Amet nisl suscipit adipiscing bibendum est ultricies integer quis.
-
-Tellus mauris a diam maecenas. Non pulvinar neque laoreet suspendisse interdum consectetur libero id faucibus. In nibh mauris cursus mattis molestie a iaculis. Massa ultricies mi quis hendrerit. Etiam sit amet nisl purus in mollis. Quam pellentesque nec nam aliquam sem et. Interdum velit laoreet id donec ultrices tincidunt. Et malesuada fames ac turpis egestas integer. Viverra vitae congue eu consequat ac. Tincidunt augue interdum velit euismod in pellentesque. Consectetur lorem donec massa sapien faucibus. Sit amet mauris commodo quis imperdiet massa tincidunt nunc pulvinar. Lorem ipsum dolor sit amet consectetur.
-
-Sagittis aliquam malesuada bibendum arcu vitae elementum curabitur. Vitae auctor eu augue ut lectus. Diam volutpat commodo sed egestas egestas fringilla phasellus faucibus scelerisque. Dictum at tempor commodo ullamcorper a lacus vestibulum. Porttitor rhoncus dolor purus non enim. Scelerisque eleifend donec pretium vulputate sapien nec sagittis aliquam malesuada. Quam lacus suspendisse faucibus interdum posuere lorem ipsum dolor sit. Ultrices sagittis orci a scelerisque purus semper eget. Sit amet consectetur adipiscing elit ut aliquam purus sit. Ornare arcu dui vivamus arcu felis bibendum. Mus mauris vitae ultricies leo integer malesuada nunc vel. Enim eu turpis egestas pretium aenean. Est pellentesque elit ullamcorper dignissim. Orci ac auctor augue mauris augue neque gravida in.`
+var (
+	//go:embed lorem_ipsum.txt
+	LoremIpsum string
+	Checkmark  = flu.URL("https://thumbs.dreamstime.com/z/black-check-mark-icon-tick-symbol-tick-icon-vector-illustration-flat-ok-sticker-icon-isolated-white-accept-black-check-mark-137505360.jpg")
+)
 
 type CommandListener struct {
-	flu.RateLimiter
+	syncf.Locker
 }
 
 func (l CommandListener) Greet(ctx context.Context, client telegram.Client, cmd *telegram.Command) error {
@@ -45,14 +39,6 @@ func (l CommandListener) Greet(ctx context.Context, client telegram.Client, cmd 
 }
 
 func (l CommandListener) Tick(ctx context.Context, client telegram.Client, cmd *telegram.Command) error {
-	url := "https://thumbs.dreamstime.com/z/black-check-mark-icon-tick-symbol-tick-icon-vector-illustration-flat-ok-sticker-icon-isolated-white-accept-black-check-mark-137505360.jpg"
-
-	mvar := media.NewVar()
-	mvar.Set(&media.Value{
-		MIMEType: "image/jpeg",
-		Input:    flu.URL(url),
-	}, nil)
-
 	html := &html.Writer{
 		Context: ctx,
 		Out: &output.Paged{
@@ -64,23 +50,22 @@ func (l CommandListener) Tick(ctx context.Context, client telegram.Client, cmd *
 		},
 	}
 
+	media := syncf.CompletedFuture[*receiver.Media]{
+		Value: &receiver.Media{
+			MIMEType: "image/jpeg",
+			Input:    Checkmark,
+		},
+	}
+
 	return html.
 		Text("Here's a ").
 		Bold("tick").
 		Italic(" for ya!").
-		Media(url, mvar, true, true).
+		Media(Checkmark.Unmask(), media, true, true).
 		Flush()
 }
 
 func (l CommandListener) Lorem(ctx context.Context, client telegram.Client, cmd *telegram.Command) error {
-	url := "https://thumbs.dreamstime.com/z/black-check-mark-icon-tick-symbol-tick-icon-vector-illustration-flat-ok-sticker-icon-isolated-white-accept-black-check-mark-137505360.jpg"
-
-	mvar := media.NewVar()
-	mvar.Set(&media.Value{
-		MIMEType: "image/jpeg",
-		Input:    flu.File("tick.jpg"),
-	}, nil)
-
 	html := &html.Writer{
 		Context: ctx,
 		Out: &output.Paged{
@@ -93,11 +78,18 @@ func (l CommandListener) Lorem(ctx context.Context, client telegram.Client, cmd 
 		},
 	}
 
+	media := syncf.CompletedFuture[*receiver.Media]{
+		Value: &receiver.Media{
+			MIMEType: "image/jpeg",
+			Input:    flu.File("tick.jpg"),
+		},
+	}
+
 	return html.
 		Text(LoremIpsum).
-		Media(url, mvar, false, true).
-		Media(url, mvar, false, true).
-		Media(url, mvar, false, true).
+		Media(Checkmark.Unmask(), media, false, true).
+		Media(Checkmark.Unmask(), media, false, true).
+		Media(Checkmark.Unmask(), media, false, true).
 		Flush()
 }
 
@@ -176,21 +168,21 @@ func (l CommandListener) Question(ctx context.Context, client telegram.Client, c
 //
 // You can launch this example by simply doing:
 //   cd example/ && go run main.go <token>
-// where <token> is your Telegram Bot API token.
+// where <token> is your Telegram bot API token.
 func main() {
+	logf.ResetLevel(logf.Trace)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	logrus.SetLevel(logrus.DebugLevel)
-
-	bot := telegram.NewBot(ctx, nil, os.Args[1])
+	clock := syncf.DefaultClock
+	bot := telegram.NewBot(clock, nil, os.Args[1])
 
 	defer flu.CloseQuietly(
 		bot.CommandListener(CommandListener{
-			RateLimiter: flu.ConcurrencyRateLimiter(2),
+			Locker: syncf.Semaphore(clock, 2, 0),
 		}),
 	)
 
-	logrus.Infof("bot username: %s", bot.Username())
-	flu.AwaitSignal(ctx, syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
+	syncf.AwaitSignal(ctx, syscall.SIGINT, syscall.SIGABRT, syscall.SIGKILL, syscall.SIGTERM)
 }

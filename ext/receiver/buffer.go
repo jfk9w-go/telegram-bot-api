@@ -3,12 +3,12 @@ package receiver
 import (
 	"context"
 
-	"github.com/jfk9w-go/telegram-bot-api/ext/media"
+	"github.com/jfk9w-go/flu/syncf"
 	"github.com/pkg/errors"
 )
 
 type CaptionedMedia struct {
-	Ref     media.Ref
+	Ref     syncf.Future[*Media]
 	Caption string
 }
 
@@ -33,7 +33,7 @@ func (b *Buffer) SendText(ctx context.Context, text string) error {
 	return nil
 }
 
-func (b *Buffer) SendMedia(ctx context.Context, ref media.Ref, caption string) error {
+func (b *Buffer) SendMedia(ctx context.Context, ref syncf.Future[*Media], caption string) error {
 	b.Media = append(b.Media, CaptionedMedia{ref, caption})
 	return nil
 }

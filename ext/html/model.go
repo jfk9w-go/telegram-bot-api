@@ -3,9 +3,10 @@ package html
 import (
 	"context"
 
-	telegram "github.com/jfk9w-go/telegram-bot-api"
+	"github.com/jfk9w-go/flu/syncf"
+	"github.com/jfk9w-go/telegram-bot-api/ext/receiver"
 
-	"github.com/jfk9w-go/telegram-bot-api/ext/media"
+	telegram "github.com/jfk9w-go/telegram-bot-api"
 	"golang.org/x/net/html"
 )
 
@@ -42,7 +43,7 @@ type Output interface {
 	Write(text string)
 	WriteBreakable(ctx context.Context, text string) error
 	WriteUnbreakable(ctx context.Context, text string) error
-	AddMedia(ctx context.Context, ref media.Ref, anchor string, collapsible bool) error
+	AddMedia(ctx context.Context, ref syncf.Future[*receiver.Media], anchor string, collapsible bool) error
 	BreakPage(ctx context.Context) error
 	Flush(ctx context.Context) error
 	PageCapacity() int

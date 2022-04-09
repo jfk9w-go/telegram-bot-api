@@ -3,9 +3,8 @@ package receiver
 import (
 	"context"
 
-	"github.com/jfk9w-go/telegram-bot-api/ext/media"
+	"github.com/jfk9w-go/flu/syncf"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 type receiverFunc func(ctx context.Context, receiver Interface) error
@@ -21,7 +20,7 @@ func (r *Broadcast) SendText(ctx context.Context, text string) error {
 	})
 }
 
-func (r *Broadcast) SendMedia(ctx context.Context, ref media.Ref, caption string) error {
+func (r *Broadcast) SendMedia(ctx context.Context, ref syncf.Future[*Media], caption string) error {
 	return r.broadcast(ctx, "media", func(ctx context.Context, receiver Interface) error {
 		return receiver.SendMedia(ctx, ref, caption)
 	})
@@ -33,9 +32,6 @@ func (r *Broadcast) broadcast(ctx context.Context, description string, body rece
 			if r.Strict {
 				return errors.Wrapf(err, "send %s to %s", description, receiver)
 			}
-
-			logrus.WithField("receiver", receiver).
-				Warnf("send %s: %s", description, err)
 		}
 	}
 

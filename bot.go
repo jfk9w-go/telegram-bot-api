@@ -8,76 +8,98 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jfk9w-go/flu/logf"
+
+	"github.com/jfk9w-go/flu/httpf"
+
+	"github.com/jfk9w-go/flu/syncf"
+
 	"github.com/jfk9w-go/flu"
-	"github.com/jfk9w-go/flu/me3x"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
+func log() logf.Interface {
+	return logf.Get(rootLoggerName)
+}
+
 type Bot struct {
-	*BaseClient
-	*FloodControlAware
-	*ConversationAware
+	*baseClient
+	*floodControlAware
+	*conversationAware
 	ctx    context.Context
-	cancel func()
+	cancel context.CancelFunc
+	work   syncf.WaitGroup
 	me     *User
-	work   flu.WaitGroup
 	once   sync.Once
 }
 
-func NewBot(ctx context.Context, client *http.Client, token string) *Bot {
-	return NewBotWithEndpoint(ctx, client, DefaultEndpoint(token))
-}
+func NewBot(clock syncf.Clock, client httpf.Client, token string) *Bot {
+	id := rootLoggerName + "." + ShortenToken(token)
+	if token == "" {
+		logf.Get(id).Panicf(nil, "token must not be empty")
+	}
 
-func NewBotWithEndpoint(ctx context.Context, client *http.Client, endpoint EndpointFunc) *Bot {
-	base := NewBaseClientWithEndpoint(client, endpoint)
-	floodControl := FloodControl(base)
-	conversations := Conversations(floodControl)
-	ctx, cancel := context.WithCancel(ctx)
+	if client == nil {
+		transport := httpf.NewDefaultTransport()
+		transport.ResponseHeaderTimeout = 2 * time.Minute
+		client = &http.Client{Transport: transport}
+	}
+
+	baseClient := &baseClient{
+		client:   client,
+		endpoint: func(method string) string { return "https://api.telegram.org/bot" + token + "/" + method },
+		id:       id,
+	}
+
+	floodControlAware := &floodControlAware{
+		clock:    clock,
+		executor: baseClient,
+	}
+
+	conversationAware := &conversationAware{
+		sender: floodControlAware,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Bot{
-		BaseClient:        base,
-		FloodControlAware: floodControl,
-		ConversationAware: conversations,
+		baseClient:        baseClient,
+		floodControlAware: floodControlAware,
+		conversationAware: conversationAware,
 		ctx:               ctx,
 		cancel:            cancel,
 	}
 }
 
-func (bot *Bot) Labels() me3x.Labels {
-	return me3x.Labels{}.Add("bot", bot.Username())
-}
-
-func (bot *Bot) log() *logrus.Entry {
-	return logrus.WithFields(bot.Labels().Map())
-}
-
-func (bot *Bot) Listen(options GetUpdatesOptions) <-chan Update {
-	log := bot.log()
+func (b *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 	channel := make(chan Update)
-	bot.work.Go(bot.ctx, func(ctx context.Context) {
+	_ = syncf.GoWith(b.ctx, b.work.Spawn, func(ctx context.Context) {
 		defer close(channel)
 		for {
-			updates, err := bot.GetUpdates(ctx, options)
+			updates, err := b.GetUpdates(ctx, options)
 			switch {
-			case flu.IsContextRelated(err):
+			case syncf.IsContextRelated(err):
 				return
 
 			case err != nil:
-				log.Warnf("poll error: %s", err)
+				logf.Get(b).Warnf(ctx, "poll error: %s", err)
 				if err := flu.Sleep(ctx, time.Duration(options.TimeoutSecs)*time.Second); err != nil {
 					return
 				}
 
 			default:
 				for _, update := range updates {
+					logf.Get(b).Tracef(ctx, "received update %d", update.ID)
+					if update.ID < options.Offset {
+						continue
+					}
+
 					options.Offset = update.ID.Increment()
 					if update.Message != nil && update.Message.ReplyToMessage != nil {
-						if err := bot.Answer(ctx, update.Message); err == nil {
+						if err := b.Answer(ctx, update.Message); err == nil {
 							continue
-						} else if flu.IsContextRelated(err) {
+						} else if syncf.IsContextRelated(err) {
 							return
 						} else {
-							bot.log().Warnf("answer %d: %s", update.Message.ID, err)
+							logf.Get(b).Warnf(ctx, "answer %d: %s", update.Message.ID, err)
 						}
 					}
 
@@ -85,7 +107,6 @@ func (bot *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 					case <-ctx.Done():
 						return
 					case channel <- update:
-						break
 					}
 				}
 			}
@@ -95,18 +116,19 @@ func (bot *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 	return channel
 }
 
-func (bot *Bot) Username() Username {
-	bot.once.Do(func() {
-		ctx, cancel := context.WithTimeout(bot.ctx, time.Minute)
+func (b *Bot) Username() Username {
+	b.once.Do(func() {
+		ctx, cancel := context.WithTimeout(b.ctx, time.Minute)
 		defer cancel()
-		if me, err := bot.GetMe(ctx); err != nil {
-			panic(err)
+		if me, err := b.GetMe(ctx); err != nil {
+			logf.Get(b).Panicf(ctx, "getMe failed: %v", err)
 		} else {
-			bot.me = me
+			b.me = me
+			logf.Get(b).Infof(ctx, "got username: %s", me.Username.String())
 		}
 	})
 
-	return *bot.me.Username
+	return *b.me.Username
 }
 
 var DefaultCommandsOptions = &GetUpdatesOptions{
@@ -114,94 +136,93 @@ var DefaultCommandsOptions = &GetUpdatesOptions{
 	AllowedUpdates: []string{"message", "edited_message", "callback_query"},
 }
 
-func (bot *Bot) Commands() <-chan *Command {
-	channel := make(chan *Command)
-	bot.work.Add(1)
-	go bot.pipeCommands(bot.Listen(*DefaultCommandsOptions), channel)
-	return channel
-}
-
-func (bot *Bot) pipeCommands(updates <-chan Update, commands chan<- *Command) {
-	defer func() {
-		close(commands)
-		bot.work.Done()
-	}()
-
-	for update := range updates {
-		if cmd := bot.extractCommand(update); cmd != nil {
-			commands <- cmd
+func (b *Bot) Commands() <-chan *Command {
+	updates := b.Listen(*DefaultCommandsOptions)
+	commands := make(chan *Command)
+	_ = syncf.GoWith(b.ctx, b.work.Spawn, func(ctx context.Context) {
+		defer close(commands)
+		for update := range updates {
+			if cmd := b.extractCommand(update); cmd != nil {
+				commands <- cmd
+			}
 		}
-	}
+	})
+
+	return commands
 }
 
-func (bot *Bot) CommandListener(value interface{}) *Bot {
+func (b *Bot) CommandListener(value interface{}) *Bot {
 	var listener CommandListener
 	switch value := value.(type) {
 	case CommandListener:
 		listener = value
 	default:
-		listener = CommandRegistryFrom(value)
+		registry := make(CommandRegistry)
+		if err := registry.From(value); err != nil {
+			logf.Get(b).Panicf(nil, "register command listener from %T: %v", value, err)
+		}
+
+		listener = registry
 	}
 
-	commands := bot.Commands()
-	bot.work.Go(bot.ctx, func(ctx context.Context) {
+	commands := b.Commands()
+	_ = syncf.GoWith(b.ctx, b.work.Spawn, func(ctx context.Context) {
 		for cmd := range commands {
 			if cmd.Key == "/start" && cmd.Payload != "" {
 				if data, err := base64.URLEncoding.DecodeString(cmd.Payload); err != nil {
-					logrus.WithFields(cmd.Labels().Map()).
-						Debugf("parse base64 start data: %s", err)
+					logf.Get(b).Warnf(ctx, "parse %s parameters: %v", cmd, err)
 				} else {
-					cmd.init(bot.Username(), string(data))
+					cmd.init(b.Username(), string(data))
 				}
 			}
 
-			if err := bot.HandleCommand(ctx, listener, cmd); err != nil {
-				if flu.IsContextRelated(err) {
-					return
-				}
-
-				cmd.Log(bot).Warnf("handle command: %s", err)
-			} else {
-				cmd.Log(bot).Debugf("handle command: ok")
+			err := b.HandleCommand(ctx, listener, cmd)
+			if syncf.IsContextRelated(err) {
+				return
 			}
+
+			logf.Get(b).Resultf(ctx, logf.Debug, logf.Error, "handle %s: %v", cmd, err)
 		}
 	})
 
-	return bot
+	return b
 }
 
-func (bot *Bot) CommandListenerFunc(fun CommandListenerFunc) *Bot {
-	return bot.CommandListener(fun)
+func (b *Bot) CommandListenerFunc(fun CommandListenerFunc) *Bot {
+	return b.CommandListener(fun)
 }
 
-func (bot *Bot) HandleCommand(ctx context.Context, listener CommandListener, cmd *Command) (err error) {
-	err = listener.OnCommand(ctx, bot, cmd)
-	switch {
-	case flu.IsContextRelated(err):
-		return
-	case err != nil:
-		if err := cmd.Reply(ctx, bot, err.Error()); err != nil {
-			return errors.Wrap(err, "reply")
+func (b *Bot) HandleCommand(ctx context.Context, listener CommandListener, cmd *Command) error {
+	err := listener.OnCommand(ctx, b, cmd)
+	if syncf.IsContextRelated(err) {
+		return err
+	}
+
+	if err != nil {
+		replyErr := cmd.Reply(ctx, b, err.Error())
+		logf.Get(b).Resultf(ctx, logf.Debug, logf.Warn, "reply to %s with %s: %s", cmd, err, replyErr)
+		if syncf.IsContextRelated(replyErr) {
+			return replyErr
 		}
 	}
 
-	return
+	return nil
 }
 
-func (bot *Bot) extractCommand(update Update) *Command {
+func (b *Bot) extractCommand(update Update) *Command {
 	switch {
 	case update.Message != nil:
-		return bot.extractCommandMessage(update.Message)
+		return b.extractCommandMessage(update.Message)
 	case update.EditedMessage != nil:
-		return bot.extractCommandMessage(update.EditedMessage)
+		return b.extractCommandMessage(update.EditedMessage)
 	case update.CallbackQuery != nil:
-		return bot.extractCommandCallbackQuery(update.CallbackQuery)
+		return b.extractCommandCallbackQuery(update.CallbackQuery)
 	default:
 		return nil
 	}
 }
 
-func (bot *Bot) extractCommandMessage(message *Message) *Command {
+func (b *Bot) extractCommandMessage(message *Message) *Command {
 	for _, entity := range message.Entities {
 		if entity.Type == "bot_command" {
 			cmd := &Command{
@@ -210,7 +231,7 @@ func (bot *Bot) extractCommandMessage(message *Message) *Command {
 				Message: message,
 			}
 
-			cmd.init(bot.Username(), message.Text[entity.Offset:])
+			cmd.init(b.Username(), message.Text[entity.Offset:])
 			return cmd
 		}
 	}
@@ -218,7 +239,7 @@ func (bot *Bot) extractCommandMessage(message *Message) *Command {
 	return nil
 }
 
-func (bot *Bot) extractCommandCallbackQuery(query *CallbackQuery) *Command {
+func (b *Bot) extractCommandCallbackQuery(query *CallbackQuery) *Command {
 	if query.Data == nil {
 		return nil
 	}
@@ -230,7 +251,7 @@ func (bot *Bot) extractCommandCallbackQuery(query *CallbackQuery) *Command {
 		CallbackQueryID: query.ID,
 	}
 
-	cmd.init(bot.Username(), *query.Data)
+	cmd.init(b.Username(), *query.Data)
 	return cmd
 }
 
@@ -238,8 +259,8 @@ func trim(value string) string {
 	return strings.Trim(value, " \n\t\v")
 }
 
-func (bot *Bot) Close() error {
-	bot.cancel()
-	bot.work.Wait()
+func (b *Bot) Close() error {
+	b.cancel()
+	b.work.Wait()
 	return nil
 }

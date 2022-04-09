@@ -9,9 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/jfk9w-go/flu/me3x"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // Command is a text bot command.
@@ -52,7 +50,7 @@ func (cmd *Command) init(username Username, value string) {
 	reader.TrimLeadingSpace = true
 	args, err := reader.Read()
 	if err != nil {
-		logrus.WithFields(cmd.Labels().Map()).Warnf("parse args: %s", err)
+		log().Errorf(nil, "parse %s args: %v", cmd, err)
 		return
 	}
 
@@ -76,28 +74,12 @@ func (cmd *Command) Reply(ctx context.Context, client Client, text string) error
 	return err
 }
 
-func (cmd *Command) Labels() me3x.Labels {
-	return me3x.Labels{}.
-		Add("chat", cmd.Chat.ID).
-		Add("user", cmd.User.ID).
-		Add("command", cmd.Key).
-		Add("payload", cmd.Payload)
-}
-
-func (cmd *Command) Log(bot *Bot) *logrus.Entry {
-	return logrus.WithFields(bot.Labels().AddAll(cmd.Labels()).Map())
-}
-
 func (cmd *Command) collectArgs() string {
 	b := new(strings.Builder)
-	writer := csv.NewWriter(b)
-	writer.Comma = ' '
-	if err := writer.Write(cmd.Args); err != nil {
-		logrus.WithFields(cmd.Labels().Map()).Warnf("write args: %s", err)
-		return ""
-	}
-
-	writer.Flush()
+	w := csv.NewWriter(b)
+	w.Comma = ' '
+	_ = w.Write(cmd.Args)
+	w.Flush()
 	return trim(b.String())
 }
 
@@ -122,11 +104,7 @@ func (cmd *Command) Button(text string) Button {
 }
 
 func (cmd *Command) String() string {
-	str := fmt.Sprintf("[cmd > %s+%s] %s", cmd.User.ID, cmd.Chat.ID, cmd.Key)
-	if cmd.Payload != "" {
-		str += " " + cmd.Payload
-	}
-	return str
+	return fmt.Sprintf("%s [%s] from %s @ %s", cmd.Key, cmd.Payload, cmd.User.ID, cmd.Chat.ID)
 }
 
 type CommandListener interface {
@@ -143,7 +121,7 @@ type CommandRegistry map[string]CommandListener
 
 func (r CommandRegistry) Add(key string, listener CommandListener) CommandRegistry {
 	if _, ok := r[key]; ok {
-		logrus.Fatalf("duplicate command handler: %s", key)
+		log().Panicf(nil, "duplicate command handler for %s", key)
 	}
 
 	r[key] = listener
@@ -162,11 +140,8 @@ func (r CommandRegistry) OnCommand(ctx context.Context, client Client, cmd *Comm
 	return nil
 }
 
-func CommandRegistryFrom(value interface{}) CommandRegistry {
+func (r CommandRegistry) From(value interface{}) error {
 	valueType := reflect.TypeOf(value)
-	registry := make(CommandRegistry)
-	log := logrus.WithField("service", fmt.Sprintf("%T", value))
-
 	elemType := valueType
 	for {
 		for i := 0; i < elemType.NumMethod(); i++ {
@@ -199,10 +174,7 @@ func CommandRegistryFrom(value interface{}) CommandRegistry {
 					return nil
 				})
 
-				registry[name] = handle
-				log.WithField("command", name).
-					WithField("handler", method.Name).
-					Infof("command handler registered")
+				r[name] = handle
 			}
 		}
 
@@ -211,10 +183,6 @@ func CommandRegistryFrom(value interface{}) CommandRegistry {
 			continue
 		}
 
-		if len(registry) == 0 {
-			log.Fatal("no command listeners found")
-		}
-
-		return registry
+		return nil
 	}
 }

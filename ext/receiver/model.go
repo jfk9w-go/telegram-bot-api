@@ -3,13 +3,17 @@ package receiver
 import (
 	"context"
 
-	"github.com/jfk9w-go/telegram-bot-api/ext/media"
-	"github.com/pkg/errors"
+	"github.com/jfk9w-go/flu"
+
+	"github.com/jfk9w-go/flu/syncf"
 )
 
-var ErrUnsupportedMediaType = errors.New("unsupported media type")
+type Media struct {
+	MIMEType string
+	Input    flu.Input
+}
 
 type Interface interface {
 	SendText(ctx context.Context, text string) error
-	SendMedia(ctx context.Context, ref media.Ref, caption string) error
+	SendMedia(ctx context.Context, ref syncf.Future[*Media], caption string) error
 }

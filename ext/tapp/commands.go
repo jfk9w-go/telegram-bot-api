@@ -6,6 +6,8 @@ import (
 	"log"
 	"strings"
 
+	"github.com/jfk9w-go/flu"
+
 	"github.com/jfk9w-go/flu/me3x"
 	"github.com/jfk9w-go/telegram-bot-api"
 	"github.com/pkg/errors"
@@ -17,7 +19,7 @@ type Scoped interface {
 
 type CommandScope struct {
 	all              bool
-	ChatIDs, UserIDs map[telegram.ID]bool
+	ChatIDs, UserIDs flu.Set[telegram.ID]
 }
 
 var Public = CommandScope{all: true}
@@ -30,6 +32,39 @@ func (s CommandScope) Wrap(listener telegram.CommandListener) telegram.CommandLi
 
 		return nil
 	}
+}
+
+func (s CommandScope) String() string {
+	if s.all {
+		return "public"
+	}
+
+	var b strings.Builder
+	if len(s.ChatIDs) > 0 {
+		b.WriteString("& chat IDs [" + joinIDs(s.ChatIDs, ", ") + "]")
+	}
+
+	if len(s.UserIDs) > 0 {
+		b.WriteString("& user IDs [" + joinIDs(s.UserIDs, ", ") + "]")
+	}
+
+	return strings.Trim(b.String(), "& ")
+}
+
+func joinIDs(ids flu.Set[telegram.ID], sep string) string {
+	var b strings.Builder
+	i := 0
+	for id := range ids {
+		if i > 0 {
+			b.WriteString(sep)
+		}
+
+		b.WriteString(id.String())
+
+		i++
+	}
+
+	return b.String()
 }
 
 func (s CommandScope) allow(chatID, userID telegram.ID) bool {
@@ -77,15 +112,15 @@ func slice(ids map[telegram.ID]bool) []telegram.ID {
 func (s CommandScope) Labels() me3x.Labels {
 	labels := me3x.Labels{}
 	if s.all {
-		return labels.Add("scope.all", true)
+		return labels.Add("public", true)
 	}
 
 	if len(s.ChatIDs) > 0 {
-		labels = labels.Add("scope.chatIDs", slice(s.ChatIDs))
+		labels = labels.Add("chatIDs", slice(s.ChatIDs))
 	}
 
 	if len(s.UserIDs) > 0 {
-		labels = labels.Add("scope.userIDs", slice(s.UserIDs))
+		labels = labels.Add("userIDs", slice(s.UserIDs))
 	}
 
 	return labels

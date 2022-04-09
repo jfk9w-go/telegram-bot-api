@@ -1,6 +1,8 @@
 package output
 
-import "context"
+import (
+	"context"
+)
 
 type Interface interface {
 	WriteUnbreakable(ctx context.Context, text string) error

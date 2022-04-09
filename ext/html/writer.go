@@ -6,7 +6,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/jfk9w-go/telegram-bot-api/ext/media"
+	"github.com/jfk9w-go/flu/syncf"
+	"github.com/jfk9w-go/telegram-bot-api/ext/receiver"
 	"golang.org/x/net/html"
 )
 
@@ -164,7 +165,7 @@ func (w *Writer) MarkupString(markup string) *Writer {
 	return w.Markup(strings.NewReader(markup))
 }
 
-func (w *Writer) Media(url string, ref media.Ref, collapsible bool, anchored bool) *Writer {
+func (w *Writer) Media(url string, ref syncf.Future[*receiver.Media], collapsible bool, anchored bool) *Writer {
 	if w.err != nil || w.Out.IsOverflown() {
 		return w
 	}

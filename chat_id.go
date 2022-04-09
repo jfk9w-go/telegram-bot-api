@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"fmt"
 	"strconv"
 )
 
@@ -51,5 +52,6 @@ func (username Username) String() string {
 
 // ChatID is either an ID or channel Username in various API calls.
 type ChatID interface {
+	fmt.Stringer
 	queryParam() string
 }
