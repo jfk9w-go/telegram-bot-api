@@ -19,6 +19,7 @@ type Listener interface {
 
 type Mixin[C any] struct {
 	Token    string
+	version  string
 	bot      *telegram.Bot
 	commands Commands
 	registry telegram.CommandRegistry
@@ -38,6 +39,7 @@ func (m *Mixin[C]) Bot() *telegram.Bot {
 }
 
 func (m *Mixin[C]) Include(ctx context.Context, app apfel.MixinApp[C]) error {
+	m.version = app.Version()
 	m.bot = telegram.NewBot(app, nil, m.Token)
 	m.commands = make(Commands)
 	m.registry = make(telegram.CommandRegistry)
@@ -71,7 +73,7 @@ func (m *Mixin[C]) AfterInclude(ctx context.Context, app apfel.MixinApp[C], mixi
 
 func (m *Mixin[C]) Run(ctx context.Context) {
 	defer logf.Get(m).Infof(ctx, "stopped")
-	AddDefaultStart(m.commands, m.registry, apfel.Version)
+	AddDefaultStart(m.commands, m.registry, m.version)
 	if err := m.commands.Set(ctx, m.bot); err != nil {
 		logf.Get(m).Panicf(ctx, "set commands: %v", err)
 	}
