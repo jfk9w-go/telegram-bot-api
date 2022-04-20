@@ -9,29 +9,14 @@ import (
 	"github.com/jfk9w-go/flu/logf"
 
 	"github.com/jfk9w-go/flu"
-	httpf "github.com/jfk9w-go/flu/httpf"
+	"github.com/jfk9w-go/flu/httpf"
 	"github.com/pkg/errors"
 )
-
-const rootLoggerName = "tgbot"
-
-func ShortenToken(token string) string {
-	if len(token) > 10 {
-		token = token[:10]
-	}
-
-	return strings.Trim(token, ":\\/_")
-}
 
 // baseClient represents a flu/http.Request factory.
 type baseClient struct {
 	client   httpf.Client
 	endpoint endpointFunc
-	id       string
-}
-
-func (c *baseClient) String() string {
-	return c.id
 }
 
 // ValidStatusCodes is a slice of valid API HTTP status codes.
@@ -248,6 +233,6 @@ func (c *baseClient) Execute(ctx context.Context, method string, body flu.Encode
 		DecodeBody(newResponse(resp)).
 		CheckStatus(ValidStatusCodes...).
 		Error()
-	logf.Get(c).Resultf(ctx, logf.Trace, logf.Warn, "execute %s: %v", method, err)
+	log().Resultf(ctx, logf.Trace, logf.Warn, "execute %s: %v", method, err)
 	return err
 }

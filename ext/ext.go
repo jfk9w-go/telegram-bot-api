@@ -10,15 +10,13 @@ import (
 )
 
 func HTML(ctx context.Context, sender telegram.Sender, chatID telegram.ID) *html.Writer {
-	return &html.Writer{
-		Context: ctx,
+	return (&html.Writer{
 		Out: &output.Paged{
 			Receiver: &receiver.Chat{
 				Sender:    sender,
 				ID:        chatID,
 				ParseMode: telegram.HTML,
 			},
-			PageSize: telegram.MaxMessageSize,
 		},
-	}
+	}).WithContext(output.With(ctx, telegram.MaxMessageSize, 0))
 }

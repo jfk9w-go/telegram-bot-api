@@ -12,7 +12,7 @@ import (
 	"github.com/jfk9w-go/flu"
 	"github.com/jfk9w-go/flu/logf"
 	"github.com/jfk9w-go/flu/syncf"
-	telegram "github.com/jfk9w-go/telegram-bot-api"
+	"github.com/jfk9w-go/telegram-bot-api"
 	"github.com/jfk9w-go/telegram-bot-api/ext/html"
 	"github.com/jfk9w-go/telegram-bot-api/ext/output"
 	"github.com/jfk9w-go/telegram-bot-api/ext/receiver"
@@ -39,8 +39,7 @@ func (l CommandListener) Greet(ctx context.Context, client telegram.Client, cmd 
 }
 
 func (l CommandListener) Tick(ctx context.Context, client telegram.Client, cmd *telegram.Command) error {
-	html := &html.Writer{
-		Context: ctx,
+	html := (&html.Writer{
 		Out: &output.Paged{
 			Receiver: &receiver.Chat{
 				Sender:    client,
@@ -48,10 +47,10 @@ func (l CommandListener) Tick(ctx context.Context, client telegram.Client, cmd *
 				ParseMode: telegram.HTML,
 			},
 		},
-	}
+	}).WithContext(ctx)
 
-	media := syncf.CompletedFuture[*receiver.Media]{
-		Value: &receiver.Media{
+	media := syncf.Value[*receiver.Media]{
+		Val: &receiver.Media{
 			MIMEType: "image/jpeg",
 			Input:    Checkmark,
 		},
@@ -61,25 +60,23 @@ func (l CommandListener) Tick(ctx context.Context, client telegram.Client, cmd *
 		Text("Here's a ").
 		Bold("tick").
 		Italic(" for ya!").
-		Media(Checkmark.Unmask(), media, true, true).
+		Media(Checkmark.String(), media, true, true).
 		Flush()
 }
 
 func (l CommandListener) Lorem(ctx context.Context, client telegram.Client, cmd *telegram.Command) error {
-	html := &html.Writer{
-		Context: ctx,
+	html := (&html.Writer{
 		Out: &output.Paged{
 			Receiver: &receiver.Chat{
 				Sender:    client,
 				ID:        cmd.Chat.ID,
 				ParseMode: telegram.HTML,
 			},
-			PageSize: telegram.MaxMessageSize * 9 / 10,
 		},
-	}
+	}).WithContext(output.With(ctx, telegram.MaxMessageSize*9/10, 0))
 
-	media := syncf.CompletedFuture[*receiver.Media]{
-		Value: &receiver.Media{
+	media := syncf.Value[*receiver.Media]{
+		Val: &receiver.Media{
 			MIMEType: "image/jpeg",
 			Input:    flu.File("tick.jpg"),
 		},
@@ -87,9 +84,9 @@ func (l CommandListener) Lorem(ctx context.Context, client telegram.Client, cmd 
 
 	return html.
 		Text(LoremIpsum).
-		Media(Checkmark.Unmask(), media, false, true).
-		Media(Checkmark.Unmask(), media, false, true).
-		Media(Checkmark.Unmask(), media, false, true).
+		Media(Checkmark.String(), media, false, true).
+		Media(Checkmark.String(), media, false, true).
+		Media(Checkmark.String(), media, false, true).
 		Flush()
 }
 

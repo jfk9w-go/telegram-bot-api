@@ -1,6 +1,7 @@
 package html_test
 
 import (
+	"context"
 	"testing"
 
 	tghtml "github.com/jfk9w-go/telegram-bot-api/ext/html"
@@ -18,12 +19,10 @@ func (f textOnly) Format(text string, attrs []html.Attribute) string {
 
 func TestWriter_Builder(t *testing.T) {
 	buf := receiver.NewBuffer()
-	writer := &tghtml.Writer{
-		Out: &output.Paged{
-			Receiver: buf,
-			PageSize: 72,
-		},
-	}
+	writer := (&tghtml.Writer{
+		Out:     &output.Paged{Receiver: buf},
+		Anchors: textOnly{},
+	}).WithContext(output.With(context.Background(), 72, 0))
 
 	err := writer.
 		Bold("A Study in Scarlet is an 1887 detective novel by Scottish author Arthur Conan Doyle.").
@@ -41,13 +40,10 @@ func TestWriter_Builder(t *testing.T) {
 
 func TestWriter_Markup(t *testing.T) {
 	buf := receiver.NewBuffer()
-	writer := &tghtml.Writer{
-		Out: &output.Paged{
-			Receiver: buf,
-			PageSize: 45,
-		},
+	writer := (&tghtml.Writer{
+		Out:     &output.Paged{Receiver: buf},
 		Anchors: textOnly{},
-	}
+	}).WithContext(output.With(context.Background(), 45, 0))
 
 	var markup = `<strong>Музыкальный webm mp4 тред</strong><br><em>Не нашел - создал</em><br>Делимся вкусами, ищем музыку, создаем, нарезаем, постим свои либо чужие музыкальные видео.<br>Рекомендации для самостоятельного поиска соусов: <b><a href="https:&#47;&#47;pastebin.com&#47;i32h11vd" target="_blank" rel="nofollow noopener noreferrer"><i>https:&#47;&#47;pastebin.com&#47;i32h11vd</i></a></b>`
 	assert.Nil(t, writer.MarkupString(markup).Flush())
@@ -63,13 +59,10 @@ func TestWriter_Markup(t *testing.T) {
 
 func TestWriter_Markup_Autofix(t *testing.T) {
 	buf := receiver.NewBuffer()
-	writer := &tghtml.Writer{
-		Out: &output.Paged{
-			Receiver: buf,
-			PageSize: 45,
-		},
+	writer := (&tghtml.Writer{
+		Out:     &output.Paged{Receiver: buf},
 		Anchors: textOnly{},
-	}
+	}).WithContext(output.With(context.Background(), 45, 0))
 
 	var markup = `<strong>Музыкальный webm mp4 тред</strong><br><em>Не нашел - создал<br>Делимся вкусами, ищем музыку, создаем, нарезаем, постим свои либо чужие музыкальные видео.<br>Рекомендации для самостоятельного поиска соусов: <a href="https:&#47;&#47;pastebin.com&#47;i32h11vd" target="_blank" rel="nofollow noopener noreferrer">https:&#47;&#47;pastebin.com&#47;i32h11vd</a></b>`
 	assert.Nil(t, writer.MarkupString(markup).Flush())

@@ -8,15 +8,13 @@ import (
 
 	"github.com/jfk9w-go/flu/syncf"
 
-	telegram "github.com/jfk9w-go/telegram-bot-api"
+	"github.com/jfk9w-go/telegram-bot-api"
 	"github.com/jfk9w-go/telegram-bot-api/ext/receiver"
 	"golang.org/x/exp/utf8string"
 )
 
 type Paged struct {
 	Receiver       receiver.Interface
-	PageSize       int
-	PageCount      int
 	overflown      bool
 	prefix, suffix string
 	curr           strings.Builder
@@ -53,7 +51,7 @@ func (o *Paged) WriteBreakable(ctx context.Context, text string) error {
 	utext := utf8string.NewString(text)
 	length := utext.RuneCount()
 	offset := 0
-	capacity := o.PageCapacity()
+	capacity := o.PageCapacity(ctx)
 	end := offset + capacity
 	for end < length {
 		nextOffset := end
@@ -81,7 +79,7 @@ func (o *Paged) WriteBreakable(ctx context.Context, text string) error {
 		}
 
 		offset = nextOffset
-		capacity = o.PageCapacity()
+		capacity = o.PageCapacity(ctx)
 		end = offset + capacity
 	}
 
@@ -95,12 +93,12 @@ func (o *Paged) WriteUnbreakable(ctx context.Context, text string) error {
 	}
 
 	length := utf8.RuneCountInString(text)
-	if length > o.PageCapacity() {
+	if length > o.PageCapacity(ctx) {
 		if err := o.BreakPage(ctx); err != nil {
 			return err
 		}
 
-		if length > o.PageCapacity() {
+		if length > o.PageCapacity(ctx) {
 			return o.WriteBreakable(ctx, "BROKEN")
 		}
 	}
@@ -109,7 +107,7 @@ func (o *Paged) WriteUnbreakable(ctx context.Context, text string) error {
 	return nil
 }
 
-func (o *Paged) AddMedia(ctx context.Context, ref syncf.Future[*receiver.Media], anchor string, collapsible bool) error {
+func (o *Paged) AddMedia(ctx context.Context, ref syncf.Ref[*receiver.Media], anchor string, collapsible bool) error {
 	if o.overflown {
 		return nil
 	}
@@ -135,6 +133,11 @@ func (o *Paged) BreakPage(ctx context.Context) error {
 		return nil
 	}
 
+	maxPages, ok := maxPages(ctx)
+	if !ok {
+		maxPages = math.MaxInt32
+	}
+
 	if o.currSize > utf8.RuneCountInString(o.suffix) {
 		o.Write(o.suffix)
 		if err := o.Receiver.SendText(ctx, trim(o.curr.String())); err != nil {
@@ -143,7 +146,7 @@ func (o *Paged) BreakPage(ctx context.Context) error {
 
 		o.reset()
 		o.currCount++
-		if o.PageCount > 0 && o.currCount >= o.PageCount {
+		if o.currCount >= maxPages {
 			o.overflown = true
 		}
 
@@ -166,12 +169,13 @@ func (o *Paged) Flush(ctx context.Context) error {
 	return nil
 }
 
-func (o *Paged) PageCapacity() int {
-	if o.PageSize < 1 {
+func (o *Paged) PageCapacity(ctx context.Context) int {
+	pageSize, ok := pageSize(ctx)
+	if !ok {
 		return math.MaxInt32
 	}
 
-	return o.PageSize - o.currSize - utf8.RuneCountInString(o.suffix)
+	return pageSize - o.currSize - utf8.RuneCountInString(o.suffix)
 }
 
 func (o *Paged) reset() {

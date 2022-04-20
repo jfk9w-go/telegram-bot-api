@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/jfk9w-go/flu/logf"
 	"github.com/pkg/errors"
 )
 
@@ -74,6 +75,14 @@ func (cmd *Command) Reply(ctx context.Context, client Client, text string) error
 	return err
 }
 
+func (cmd *Command) ReplyCallback(ctx context.Context, client Client, text string) error {
+	if cmd.CallbackQueryID == "" {
+		return errors.New("not a callback query")
+	}
+
+	return cmd.Reply(ctx, client, text)
+}
+
 func (cmd *Command) collectArgs() string {
 	b := new(strings.Builder)
 	w := csv.NewWriter(b)
@@ -88,8 +97,13 @@ func (cmd *Command) Start(ctx context.Context, client Client) error {
 		return errors.New("not a callback query")
 	}
 
-	data := []byte(cmd.Key + " " + cmd.collectArgs())
-	url := fmt.Sprintf("https://t.me/%s?start=%s", client.Username(), base64.URLEncoding.EncodeToString(data))
+	data := base64.URLEncoding.EncodeToString([]byte(cmd.Key + " " + cmd.collectArgs()))
+	if len(data) > 64 {
+		logf.Get(client).Errorf(ctx, "start params too long for [%s]", cmd)
+		return errors.New("start params too long")
+	}
+
+	url := fmt.Sprintf("https://t.me/%s?start=%s", string(client.Username()), data)
 	return client.AnswerCallbackQuery(ctx, cmd.CallbackQueryID, &AnswerOptions{URL: url})
 }
 
@@ -140,9 +154,9 @@ func (r CommandRegistry) OnCommand(ctx context.Context, client Client, cmd *Comm
 	return nil
 }
 
-func (r CommandRegistry) From(value interface{}) error {
-	valueType := reflect.TypeOf(value)
-	elemType := valueType
+func (r CommandRegistry) From(v any) error {
+	value := reflect.ValueOf(v)
+	elemType := value.Type()
 	for {
 		for i := 0; i < elemType.NumMethod(); i++ {
 			method := elemType.Method(i)
@@ -153,6 +167,11 @@ func (r CommandRegistry) From(value interface{}) error {
 				methodType.In(3).AssignableTo(reflect.TypeOf(new(Command))) &&
 				methodType.Out(0).AssignableTo(reflect.TypeOf(new(error)).Elem()) {
 
+				value := value
+				if methodType.In(0).Kind() != reflect.Pointer && value.Kind() == reflect.Pointer {
+					value = reflect.Indirect(value)
+				}
+
 				name := strings.ToLower(method.Name)
 				if strings.HasSuffix(name, "_callback") {
 					name = name[:len(name)-9]
@@ -162,7 +181,7 @@ func (r CommandRegistry) From(value interface{}) error {
 
 				handle := CommandListenerFunc(func(ctx context.Context, client Client, command *Command) error {
 					err := method.Func.Call([]reflect.Value{
-						reflect.ValueOf(value),
+						value,
 						reflect.ValueOf(ctx),
 						reflect.ValueOf(client),
 						reflect.ValueOf(command),

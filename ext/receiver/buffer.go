@@ -3,24 +3,23 @@ package receiver
 import (
 	"context"
 
-	"github.com/jfk9w-go/flu/syncf"
 	"github.com/pkg/errors"
 )
 
-type CaptionedMedia struct {
-	Ref     syncf.Future[*Media]
+type MediaCaption struct {
+	Ref     MediaRef
 	Caption string
 }
 
 type Buffer struct {
 	Pages []string
-	Media []CaptionedMedia
+	Media []MediaCaption
 }
 
 func NewBuffer() *Buffer {
 	return &Buffer{
 		Pages: make([]string, 0),
-		Media: make([]CaptionedMedia, 0),
+		Media: make([]MediaCaption, 0),
 	}
 }
 
@@ -33,8 +32,8 @@ func (b *Buffer) SendText(ctx context.Context, text string) error {
 	return nil
 }
 
-func (b *Buffer) SendMedia(ctx context.Context, ref syncf.Future[*Media], caption string) error {
-	b.Media = append(b.Media, CaptionedMedia{ref, caption})
+func (b *Buffer) SendMedia(ctx context.Context, ref MediaRef, caption string) error {
+	b.Media = append(b.Media, MediaCaption{ref, caption})
 	return nil
 }
 

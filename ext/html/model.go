@@ -43,8 +43,8 @@ type Output interface {
 	Write(text string)
 	WriteBreakable(ctx context.Context, text string) error
 	WriteUnbreakable(ctx context.Context, text string) error
-	AddMedia(ctx context.Context, ref syncf.Future[*receiver.Media], anchor string, collapsible bool) error
+	AddMedia(ctx context.Context, ref syncf.Ref[*receiver.Media], anchor string, collapsible bool) error
 	BreakPage(ctx context.Context) error
 	Flush(ctx context.Context) error
-	PageCapacity() int
+	PageCapacity(ctx context.Context) int
 }

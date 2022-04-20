@@ -1,7 +1,7 @@
 module github.com/jfk9w-go/telegram-bot-api
 
 require (
-	github.com/jfk9w-go/flu v0.10.7
+	github.com/jfk9w-go/flu v0.10.8-0.20220420201617-38e5f3ca665b
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/exp v0.0.0-20220407100705-7b9b53b0aca4
@@ -25,7 +25,7 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.33.0 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	golang.org/x/sys v0.0.0-20220408201424-a24fb2fb8a0f // indirect
+	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad // indirect
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect

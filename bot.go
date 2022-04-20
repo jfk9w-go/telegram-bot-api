@@ -8,14 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jfk9w-go/flu/logf"
-
-	"github.com/jfk9w-go/flu/httpf"
-
-	"github.com/jfk9w-go/flu/syncf"
-
 	"github.com/jfk9w-go/flu"
+	"github.com/jfk9w-go/flu/httpf"
+	"github.com/jfk9w-go/flu/logf"
+	"github.com/jfk9w-go/flu/syncf"
 )
+
+const rootLoggerName = "telegram.bot"
 
 func log() logf.Interface {
 	return logf.Get(rootLoggerName)
@@ -33,9 +32,8 @@ type Bot struct {
 }
 
 func NewBot(clock syncf.Clock, client httpf.Client, token string) *Bot {
-	id := rootLoggerName + "." + ShortenToken(token)
 	if token == "" {
-		logf.Get(id).Panicf(nil, "token must not be empty")
+		log().Panicf(nil, "token must not be empty")
 	}
 
 	if client == nil {
@@ -47,7 +45,6 @@ func NewBot(clock syncf.Clock, client httpf.Client, token string) *Bot {
 	baseClient := &baseClient{
 		client:   client,
 		endpoint: func(method string) string { return "https://api.telegram.org/bot" + token + "/" + method },
-		id:       id,
 	}
 
 	floodControlAware := &floodControlAware{
@@ -69,9 +66,13 @@ func NewBot(clock syncf.Clock, client httpf.Client, token string) *Bot {
 	}
 }
 
+func (b *Bot) String() string {
+	return rootLoggerName
+}
+
 func (b *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 	channel := make(chan Update)
-	_ = syncf.GoWith(b.ctx, b.work.Spawn, func(ctx context.Context) {
+	_, _ = syncf.GoWith(b.ctx, b.work.Spawn, func(ctx context.Context) {
 		defer close(channel)
 		for {
 			updates, err := b.GetUpdates(ctx, options)
@@ -80,14 +81,14 @@ func (b *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 				return
 
 			case err != nil:
-				logf.Get(b).Warnf(ctx, "poll error: %s", err)
+				log().Warnf(ctx, "poll error: %s", err)
 				if err := flu.Sleep(ctx, time.Duration(options.TimeoutSecs)*time.Second); err != nil {
 					return
 				}
 
 			default:
 				for _, update := range updates {
-					logf.Get(b).Tracef(ctx, "received update %d", update.ID)
+					log().Tracef(ctx, "received update %d", update.ID)
 					if update.ID < options.Offset {
 						continue
 					}
@@ -99,7 +100,7 @@ func (b *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 						} else if syncf.IsContextRelated(err) {
 							return
 						} else {
-							logf.Get(b).Warnf(ctx, "answer %d: %s", update.Message.ID, err)
+							log().Warnf(ctx, "answer %d: %s", update.Message.ID, err)
 						}
 					}
 
@@ -121,10 +122,10 @@ func (b *Bot) Username() Username {
 		ctx, cancel := context.WithTimeout(b.ctx, time.Minute)
 		defer cancel()
 		if me, err := b.GetMe(ctx); err != nil {
-			logf.Get(b).Panicf(ctx, "getMe failed: %v", err)
+			log().Panicf(ctx, "getMe failed: %v", err)
 		} else {
 			b.me = me
-			logf.Get(b).Infof(ctx, "got username: %s", me.Username.String())
+			log().Infof(ctx, "got username: %s", me.Username.String())
 		}
 	})
 
@@ -139,7 +140,7 @@ var DefaultCommandsOptions = &GetUpdatesOptions{
 func (b *Bot) Commands() <-chan *Command {
 	updates := b.Listen(*DefaultCommandsOptions)
 	commands := make(chan *Command)
-	_ = syncf.GoWith(b.ctx, b.work.Spawn, func(ctx context.Context) {
+	_, _ = syncf.GoWith(b.ctx, b.work.Spawn, func(ctx context.Context) {
 		defer close(commands)
 		for update := range updates {
 			if cmd := b.extractCommand(update); cmd != nil {
@@ -166,26 +167,40 @@ func (b *Bot) CommandListener(value interface{}) *Bot {
 	}
 
 	commands := b.Commands()
-	_ = syncf.GoWith(b.ctx, b.work.Spawn, func(ctx context.Context) {
+	_, _ = syncf.GoWith(b.ctx, b.work.Spawn, func(ctx context.Context) {
 		for cmd := range commands {
-			if cmd.Key == "/start" && cmd.Payload != "" {
-				if data, err := base64.URLEncoding.DecodeString(cmd.Payload); err != nil {
-					logf.Get(b).Warnf(ctx, "parse %s parameters: %v", cmd, err)
-				} else {
-					cmd.init(b.Username(), string(data))
+			err := b.onStart(ctx, cmd)
+			switch {
+			case syncf.IsContextRelated(err):
+				return
+			case err == nil:
+				err = listener.OnCommand(ctx, b, cmd)
+				if syncf.IsContextRelated(err) {
+					return
 				}
 			}
 
-			err := b.HandleCommand(ctx, listener, cmd)
-			if syncf.IsContextRelated(err) {
-				return
-			}
-
 			logf.Get(b).Resultf(ctx, logf.Debug, logf.Error, "handle %s: %v", cmd, err)
+
+			if err != nil {
+				_ = cmd.Reply(ctx, b, err.Error())
+			}
 		}
 	})
 
 	return b
+}
+
+func (b *Bot) onStart(ctx context.Context, cmd *Command) error {
+	if cmd.Key == "/start" && cmd.Payload != "" {
+		if data, err := base64.URLEncoding.DecodeString(cmd.Payload); err != nil {
+			logf.Get(b).Warnf(ctx, "parse %s parameters: %v", cmd, err)
+		} else {
+			cmd.init(b.Username(), string(data))
+		}
+	}
+
+	return nil
 }
 
 func (b *Bot) CommandListenerFunc(fun CommandListenerFunc) *Bot {
@@ -200,7 +215,7 @@ func (b *Bot) HandleCommand(ctx context.Context, listener CommandListener, cmd *
 
 	if err != nil {
 		replyErr := cmd.Reply(ctx, b, err.Error())
-		logf.Get(b).Resultf(ctx, logf.Debug, logf.Warn, "reply to %s with %s: %s", cmd, err, replyErr)
+		log().Resultf(ctx, logf.Debug, logf.Warn, "reply to %s with %s: %s", cmd, err, replyErr)
 		if syncf.IsContextRelated(replyErr) {
 			return replyErr
 		}

@@ -9,16 +9,23 @@ import (
 	"github.com/jfk9w-go/flu/apfel"
 	"github.com/jfk9w-go/flu/logf"
 	"github.com/jfk9w-go/flu/syncf"
-	telegram "github.com/jfk9w-go/telegram-bot-api"
+	"github.com/jfk9w-go/telegram-bot-api"
 )
+
+type Config struct {
+	Token string `yaml:"token" doc:"Telegram Bot API token."`
+}
+
+type Context interface {
+	TelegramConfig() Config
+}
 
 type Listener interface {
 	String() string
-	TelegramListener() Listener
+	Scoped
 }
 
-type Mixin[C any] struct {
-	Token    string
+type Mixin[C Context] struct {
 	version  string
 	bot      *telegram.Bot
 	commands Commands
@@ -26,12 +33,8 @@ type Mixin[C any] struct {
 	once     sync.Once
 }
 
-func (m *Mixin[C]) MixinID() string {
-	return "tgbot." + telegram.ShortenToken(m.Token)
-}
-
 func (m *Mixin[C]) String() string {
-	return m.MixinID()
+	return "telegram.bot"
 }
 
 func (m *Mixin[C]) Bot() *telegram.Bot {
@@ -40,7 +43,7 @@ func (m *Mixin[C]) Bot() *telegram.Bot {
 
 func (m *Mixin[C]) Include(ctx context.Context, app apfel.MixinApp[C]) error {
 	m.version = app.Version()
-	m.bot = telegram.NewBot(app, nil, m.Token)
+	m.bot = telegram.NewBot(app, nil, app.Config().TelegramConfig().Token)
 	m.commands = make(Commands)
 	m.registry = make(telegram.CommandRegistry)
 	return nil
@@ -65,7 +68,7 @@ func (m *Mixin[C]) AfterInclude(ctx context.Context, app apfel.MixinApp[C], mixi
 	for key, listener := range local {
 		scope.Transform(func(scope telegram.BotCommandScope) { m.commands.AddAll(scope, key) })
 		m.registry.Add(key, scope.Wrap(listener))
-		logf.Get(m).Infof(ctx, "register %s%s for %s", mixin, key, scope)
+		logf.Get(m).Infof(ctx, "register %s @ [%s] for %s", key, mixin, scope)
 	}
 
 	return nil

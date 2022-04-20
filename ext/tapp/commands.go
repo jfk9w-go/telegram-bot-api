@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/jfk9w-go/flu"
-
 	"github.com/jfk9w-go/flu/me3x"
 	"github.com/jfk9w-go/telegram-bot-api"
 	"github.com/pkg/errors"
@@ -89,12 +88,12 @@ func (s CommandScope) Transform(body func(scope telegram.BotCommandScope)) {
 		return
 	}
 
-	for chatID := range s.ChatIDs {
-		body(telegram.BotCommandScope{Type: telegram.BotCommandScopeChat, ChatID: chatID})
-	}
+	chatIDs := flu.Set[telegram.ID]{}
+	flu.AppendAll[telegram.ID](&chatIDs, s.UserIDs)
+	flu.AppendAll[telegram.ID](&chatIDs, s.ChatIDs)
 
-	if len(s.UserIDs) > 0 {
-		body(telegram.BotCommandScope{Type: telegram.BotCommandScopeAllPrivateChats})
+	for chatID := range chatIDs {
+		body(telegram.BotCommandScope{Type: telegram.BotCommandScopeChat, ChatID: chatID})
 	}
 }
 
@@ -189,15 +188,12 @@ func add(sc map[string]string, command, description string) {
 func (c Commands) Set(ctx context.Context, client telegram.Client) error {
 	for scope, commands := range c {
 		scope := scope
-		botCommands := make([]telegram.BotCommand, len(commands))
-		i := 0
+		botCommands := make([]telegram.BotCommand, 0, len(commands))
 		for command, description := range commands {
-			botCommands[i] = telegram.BotCommand{
+			botCommands = append(botCommands, telegram.BotCommand{
 				Command:     command,
 				Description: description,
-			}
-
-			i++
+			})
 		}
 
 		if err := client.DeleteMyCommands(ctx, &scope); err != nil {

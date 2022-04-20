@@ -3,7 +3,6 @@ package receiver
 import (
 	"context"
 
-	"github.com/jfk9w-go/flu/syncf"
 	"github.com/pkg/errors"
 )
 
@@ -20,7 +19,7 @@ func (r *Broadcast) SendText(ctx context.Context, text string) error {
 	})
 }
 
-func (r *Broadcast) SendMedia(ctx context.Context, ref syncf.Future[*Media], caption string) error {
+func (r *Broadcast) SendMedia(ctx context.Context, ref MediaRef, caption string) error {
 	return r.broadcast(ctx, "media", func(ctx context.Context, receiver Interface) error {
 		return receiver.SendMedia(ctx, ref, caption)
 	})

@@ -5,29 +5,26 @@ import (
 	"strings"
 
 	"github.com/jfk9w-go/flu/logf"
-	"github.com/jfk9w-go/flu/syncf"
-	telegram "github.com/jfk9w-go/telegram-bot-api"
+	"github.com/jfk9w-go/telegram-bot-api"
 )
 
 type Chat struct {
-	Sender           telegram.Sender
-	ID               telegram.ChatID
-	Silent           bool
-	Preview          bool
-	ParseMode        telegram.ParseMode
-	ReplyMarkup      telegram.ReplyMarkup
-	SkipOnMediaError bool
+	Sender    telegram.Sender
+	ID        telegram.ChatID
+	Silent    bool
+	Preview   bool
+	ParseMode telegram.ParseMode
 }
 
 func (r *Chat) String() string {
-	return "tgbot.chat." + r.ID.String()
+	return "telegram.chat." + r.ID.String()
 }
 
 func (r *Chat) SendText(ctx context.Context, text string) error {
 	return r.sendText(ctx, text, r.Preview)
 }
 
-func (r *Chat) SendMedia(ctx context.Context, ref syncf.Future[*Media], caption string) error {
+func (r *Chat) SendMedia(ctx context.Context, ref MediaRef, caption string) error {
 	media, err := ref.Get(ctx)
 	if err == nil {
 		if media == nil {
@@ -41,13 +38,17 @@ func (r *Chat) SendMedia(ctx context.Context, ref syncf.Future[*Media], caption 
 			ParseMode: r.ParseMode,
 		}
 
-		_, err = r.Sender.Send(ctx, r.ID, payload, r.getSendOptions())
-		logf.Get(r).Resultf(ctx, logf.Debug, logf.Warn, "send media [%s] failed: %v", err)
+		_, err = r.Sender.Send(ctx, r.ID, payload, &telegram.SendOptions{
+			DisableNotification: r.Silent,
+			ReplyMarkup:         replyMarkup(ctx),
+		})
+
+		logf.Get(r).Resultf(ctx, logf.Debug, logf.Warn, "send media [%s]: %v", media.MIMEType, err)
 		if err == nil {
 			return nil
 		}
-	} else if r.SkipOnMediaError {
-		logf.Get(r).Debugf(ctx, "send media failed (skipping): %v", err)
+	} else if isSkipOnMediaError(ctx) {
+		logf.Get(r).Warnf(ctx, "send media failed (skipping): %v", err)
 		return nil
 	}
 
@@ -65,8 +66,12 @@ func (r *Chat) sendText(ctx context.Context, text string, preview bool) error {
 		DisableWebPagePreview: !preview,
 	}
 
-	_, err := r.Sender.Send(ctx, r.ID, payload, r.getSendOptions())
-	logf.Get(r).Resultf(ctx, logf.Debug, logf.Warn, "send text message [%s]: %v", cut(text, 50), err)
+	_, err := r.Sender.Send(ctx, r.ID, payload, &telegram.SendOptions{
+		DisableNotification: r.Silent,
+		ReplyMarkup:         replyMarkup(ctx),
+	})
+
+	logf.Get(r).Resultf(ctx, logf.Debug, logf.Warn, "send text [%s]: %v", cut(text, 50), err)
 	return err
 }
 
@@ -81,11 +86,4 @@ func cut(value string, size int) string {
 	}
 
 	return value[:size] + "..."
-}
-
-func (r *Chat) getSendOptions() *telegram.SendOptions {
-	return &telegram.SendOptions{
-		DisableNotification: r.Silent,
-		ReplyMarkup:         r.ReplyMarkup,
-	}
 }

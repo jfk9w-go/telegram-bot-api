@@ -12,13 +12,27 @@ import (
 )
 
 type Writer struct {
-	Context    context.Context
 	Out        Output
 	Tags       TagConverter
 	Anchors    AnchorFormat
+	ctx        context.Context
 	currTag    *Tag
 	currAnchor *anchor
 	err        error
+}
+
+func (w *Writer) Context() context.Context {
+	if w.ctx == nil {
+		return context.Background()
+	}
+
+	return w.ctx
+}
+
+func (w *Writer) WithContext(ctx context.Context) *Writer {
+	value := *w
+	value.ctx = ctx
+	return &value
 }
 
 func (w *Writer) StartTag(name string, attrs []html.Attribute) *Writer {
@@ -28,7 +42,7 @@ func (w *Writer) StartTag(name string, attrs []html.Attribute) *Writer {
 
 	switch name {
 	case "br":
-		w.err = w.Out.WriteBreakable(w.Context, "\n")
+		w.err = w.Out.WriteBreakable(w.Context(), "\n")
 
 	case "a":
 		w.currAnchor = &anchor{
@@ -38,8 +52,8 @@ func (w *Writer) StartTag(name string, attrs []html.Attribute) *Writer {
 
 	default:
 		if tag, ok := w.getTagConverter().Get(name, attrs); ok {
-			if len(tag.Open)+len(tag.Close)+3 >= w.Out.PageCapacity() {
-				if err := w.Out.BreakPage(w.Context); err != nil {
+			if len(tag.Open)+len(tag.Close)+3 >= w.Out.PageCapacity(w.Context()) {
+				if err := w.Out.BreakPage(w.Context()); err != nil {
 					w.err = err
 					return w
 				}
@@ -77,7 +91,7 @@ func (w *Writer) Text(text string, args ...interface{}) *Writer {
 	if w.currAnchor != nil {
 		w.currAnchor.text += html.EscapeString(text)
 	} else {
-		w.err = w.Out.WriteBreakable(w.Context, text)
+		w.err = w.Out.WriteBreakable(w.Context(), text)
 	}
 
 	return w
@@ -91,7 +105,7 @@ func (w *Writer) EndTag() *Writer {
 	switch {
 	case w.currAnchor != nil && w.currAnchor.parent == w.currTag:
 		str := w.getAnchorFormat().Format(w.currAnchor.text, w.currAnchor.attrs)
-		if err := w.Out.WriteUnbreakable(w.Context, str); err != nil {
+		if err := w.Out.WriteUnbreakable(w.Context(), str); err != nil {
 			w.err = err
 		} else {
 			w.currAnchor = nil
@@ -132,7 +146,7 @@ func (w *Writer) Link(text, href string) *Writer {
 	if w.err != nil || w.Out.IsOverflown() {
 		return w
 	}
-	w.err = w.Out.WriteUnbreakable(w.Context, Anchor(text, href))
+	w.err = w.Out.WriteUnbreakable(w.Context(), Anchor(text, href))
 	return w
 }
 
@@ -165,7 +179,7 @@ func (w *Writer) MarkupString(markup string) *Writer {
 	return w.Markup(strings.NewReader(markup))
 }
 
-func (w *Writer) Media(url string, ref syncf.Future[*receiver.Media], collapsible bool, anchored bool) *Writer {
+func (w *Writer) Media(url string, ref syncf.Ref[*receiver.Media], collapsible bool, anchored bool) *Writer {
 	if w.err != nil || w.Out.IsOverflown() {
 		return w
 	}
@@ -175,7 +189,7 @@ func (w *Writer) Media(url string, ref syncf.Future[*receiver.Media], collapsibl
 		anchor = Anchor("[media]", url)
 	}
 
-	w.err = w.Out.AddMedia(w.Context, ref, anchor, collapsible)
+	w.err = w.Out.AddMedia(w.Context(), ref, anchor, collapsible)
 	return w
 }
 
@@ -187,7 +201,7 @@ func (w *Writer) Flush() error {
 		w.EndTag()
 	}
 
-	return w.Out.Flush(w.Context)
+	return w.Out.Flush(w.Context())
 }
 
 func (w *Writer) getTagConverter() TagConverter {

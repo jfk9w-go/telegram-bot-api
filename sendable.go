@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strconv"
 
-	httpf "github.com/jfk9w-go/flu/httpf"
+	"github.com/jfk9w-go/flu/httpf"
 
 	"github.com/jfk9w-go/flu"
 )
@@ -122,7 +122,7 @@ func (m Media) kind() string {
 func (m Media) body(form *httpf.Form) (flu.EncoderTo, error) {
 	switch r := m.Input.(type) {
 	case flu.URL:
-		return form.Set(string(m.Type), r.Unmask()), nil
+		return form.Set(string(m.Type), r.String()), nil
 	default:
 		return form.Multipart().File(string(m.Type), m.filename(), m.Input), nil
 	}
@@ -151,7 +151,7 @@ func (mg MediaGroup) body(form *httpf.Form) (flu.EncoderTo, error) {
 		m := mediaJSON{m, ""}
 		switch r := m.Input.(type) {
 		case flu.URL:
-			m.MediaURL = r.Unmask()
+			m.MediaURL = r.String()
 		default:
 			if !multiparted {
 				multipart = form.Multipart()
