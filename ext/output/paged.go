@@ -134,7 +134,7 @@ func (o *Paged) BreakPage(ctx context.Context) error {
 	}
 
 	maxPages, ok := maxPages(ctx)
-	if !ok {
+	if !ok || maxPages <= 0 {
 		maxPages = math.MaxInt32
 	}
 
