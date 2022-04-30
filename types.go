@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/jfk9w-go/flu"
-	httpf "github.com/jfk9w-go/flu/httpf"
+	"github.com/jfk9w-go/flu/httpf"
 )
 
 // ParseMode is a parse_mode request parameter type.
@@ -90,6 +90,7 @@ type (
 		Animation      *MessageFile    `json:"animation"`
 	}
 
+	// MessageRef is used for message copying and forwarding.
 	MessageRef struct {
 		ChatID ChatID `url:"from_chat_id"`
 		ID     ID     `url:"message_id"`

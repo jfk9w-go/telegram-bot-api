@@ -11,6 +11,7 @@ import (
 
 	"github.com/jfk9w-go/flu/logf"
 	"github.com/pkg/errors"
+	"golang.org/x/exp/utf8string"
 )
 
 // Command is a text bot command.
@@ -68,6 +69,11 @@ func (cmd *Command) Arg(i int) string {
 
 func (cmd *Command) Reply(ctx context.Context, client Client, text string) error {
 	if cmd.CallbackQueryID != "" {
+		uText := utf8string.NewString(text)
+		if uText.RuneCount() > 200 {
+			text = uText.Slice(0, 197) + "..."
+		}
+
 		return client.AnswerCallbackQuery(ctx, cmd.CallbackQueryID, &AnswerOptions{Text: text})
 	}
 
@@ -77,7 +83,7 @@ func (cmd *Command) Reply(ctx context.Context, client Client, text string) error
 
 func (cmd *Command) ReplyCallback(ctx context.Context, client Client, text string) error {
 	if cmd.CallbackQueryID == "" {
-		return errors.New("not a callback query")
+		return nil
 	}
 
 	return cmd.Reply(ctx, client, text)
@@ -94,7 +100,7 @@ func (cmd *Command) collectArgs() string {
 
 func (cmd *Command) Start(ctx context.Context, client Client) error {
 	if cmd.CallbackQueryID == "" {
-		return errors.New("not a callback query")
+		return nil
 	}
 
 	data := base64.URLEncoding.EncodeToString([]byte(cmd.Key + " " + cmd.collectArgs()))

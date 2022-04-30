@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/jfk9w-go/flu"
+	"github.com/jfk9w-go/flu/colf"
 	"github.com/jfk9w-go/flu/me3x"
 	"github.com/jfk9w-go/telegram-bot-api"
 	"github.com/pkg/errors"
@@ -18,7 +18,7 @@ type Scoped interface {
 
 type CommandScope struct {
 	all              bool
-	ChatIDs, UserIDs flu.Set[telegram.ID]
+	ChatIDs, UserIDs colf.Set[telegram.ID]
 }
 
 var Public = CommandScope{all: true}
@@ -39,18 +39,22 @@ func (s CommandScope) String() string {
 	}
 
 	var b strings.Builder
-	if len(s.ChatIDs) > 0 {
+	if s.ChatIDs != nil {
 		b.WriteString("& chat IDs [" + joinIDs(s.ChatIDs, ", ") + "]")
 	}
 
-	if len(s.UserIDs) > 0 {
+	if s.UserIDs != nil {
 		b.WriteString("& user IDs [" + joinIDs(s.UserIDs, ", ") + "]")
+	}
+
+	if b.Len() == 0 {
+		return "nobody"
 	}
 
 	return strings.Trim(b.String(), "& ")
 }
 
-func joinIDs(ids flu.Set[telegram.ID], sep string) string {
+func joinIDs(ids colf.Set[telegram.ID], sep string) string {
 	var b strings.Builder
 	i := 0
 	for id := range ids {
@@ -72,11 +76,11 @@ func (s CommandScope) allow(chatID, userID telegram.ID) bool {
 	}
 
 	if s.ChatIDs != nil {
-		return userID != chatID && s.ChatIDs[chatID]
+		return s.ChatIDs[chatID]
 	}
 
 	if s.UserIDs != nil {
-		return userID == chatID && s.UserIDs[userID]
+		return s.UserIDs[userID]
 	}
 
 	return false
@@ -88,9 +92,9 @@ func (s CommandScope) Transform(body func(scope telegram.BotCommandScope)) {
 		return
 	}
 
-	chatIDs := flu.Set[telegram.ID]{}
-	flu.AppendAll[telegram.ID](&chatIDs, s.UserIDs)
-	flu.AppendAll[telegram.ID](&chatIDs, s.ChatIDs)
+	chatIDs := colf.Set[telegram.ID]{}
+	colf.AddAll[telegram.ID](&chatIDs, s.UserIDs)
+	colf.AddAll[telegram.ID](&chatIDs, s.ChatIDs)
 
 	for chatID := range chatIDs {
 		body(telegram.BotCommandScope{Type: telegram.BotCommandScopeChat, ChatID: chatID})

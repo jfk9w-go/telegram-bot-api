@@ -233,6 +233,6 @@ func (c *baseClient) Execute(ctx context.Context, method string, body flu.Encode
 		DecodeBody(newResponse(resp)).
 		CheckStatus(ValidStatusCodes...).
 		Error()
-	log().Resultf(ctx, logf.Trace, logf.Warn, "execute %s: %v", method, err)
+	log().Resultf(ctx, logf.Trace, logf.Warn, "execute [%s]: %v", method, err)
 	return err
 }

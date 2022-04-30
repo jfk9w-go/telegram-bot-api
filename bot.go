@@ -125,7 +125,7 @@ func (b *Bot) Username() Username {
 			log().Panicf(ctx, "getMe failed: %v", err)
 		} else {
 			b.me = me
-			log().Infof(ctx, "got username: %s", me.Username.String())
+			logf.Get(b).Infof(ctx, "got username: %s", me.Username.String())
 		}
 	})
 

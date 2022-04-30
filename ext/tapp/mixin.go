@@ -68,7 +68,7 @@ func (m *Mixin[C]) AfterInclude(ctx context.Context, app apfel.MixinApp[C], mixi
 	for key, listener := range local {
 		scope.Transform(func(scope telegram.BotCommandScope) { m.commands.AddAll(scope, key) })
 		m.registry.Add(key, scope.Wrap(listener))
-		logf.Get(m).Infof(ctx, "register %s @ [%s] for %s", key, mixin, scope)
+		logf.Get(m).Infof(ctx, "register command %s @ [%s] for %s", key, mixin, scope)
 	}
 
 	return nil
@@ -78,7 +78,7 @@ func (m *Mixin[C]) Run(ctx context.Context) {
 	defer logf.Get(m).Infof(ctx, "stopped")
 	AddDefaultStart(m.commands, m.registry, m.version)
 	if err := m.commands.Set(ctx, m.bot); err != nil {
-		logf.Get(m).Panicf(ctx, "set commands: %v", err)
+		logf.Get(m).Warnf(ctx, "set commands: %v", err)
 	}
 
 	defer flu.CloseQuietly(m.bot.CommandListener(m.registry))
