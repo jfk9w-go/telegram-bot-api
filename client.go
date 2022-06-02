@@ -15,6 +15,7 @@ type Client interface {
 	GetChatMember(ctx context.Context, chatID ChatID, userID ID) (*ChatMember, error)
 	AnswerCallbackQuery(ctx context.Context, id string, options *AnswerOptions) error
 	Send(ctx context.Context, chatID ChatID, item Sendable, options *SendOptions) (*Message, error)
+	SendChatAction(ctx context.Context, chatID ChatID, action string) error
 	SendMediaGroup(ctx context.Context, chatID ChatID, media []Media, options *SendOptions) ([]Message, error)
 	SetMyCommands(ctx context.Context, scope *BotCommandScope, commands []BotCommand) error
 	GetMyCommands(ctx context.Context, scope *BotCommandScope) ([]BotCommand, error)

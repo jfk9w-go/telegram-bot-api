@@ -227,6 +227,22 @@ func (c *baseClient) DeleteMyCommands(ctx context.Context, scope *BotCommandScop
 	return nil
 }
 
+func (c *baseClient) SendChatAction(ctx context.Context, chatID ChatID, action string) error {
+	body := new(httpf.Form).
+		Set("chat_id", chatID.queryParam()).
+		Set("action", action)
+	var ok bool
+	if err := c.Execute(ctx, "sendChatAction", body, &ok); err != nil {
+		return err
+	}
+
+	if !ok {
+		return errors.New("not ok")
+	}
+
+	return nil
+}
+
 func (c *baseClient) Execute(ctx context.Context, method string, body flu.EncoderTo, resp interface{}) error {
 	err := httpf.POST(c.endpoint(method), body).
 		Exchange(ctx, c.client).
