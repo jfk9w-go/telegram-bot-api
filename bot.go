@@ -97,11 +97,13 @@ func (b *Bot) Listen(options GetUpdatesOptions) <-chan Update {
 					if update.Message != nil && update.Message.ReplyToMessage != nil {
 						if err := b.Answer(ctx, update.Message); err == nil {
 							continue
-						} else if syncf.IsContextRelated(err) {
-							return
 						} else {
 							log().Warnf(ctx, "answer %d: %s", update.Message.ID, err)
 						}
+					}
+
+					if ctx.Err() != nil {
+						return
 					}
 
 					select {
