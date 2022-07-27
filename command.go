@@ -5,13 +5,15 @@ import (
 	"encoding/base64"
 	"encoding/csv"
 	"fmt"
+	"net/url"
 	"reflect"
 	"strings"
 	"unicode"
 
-	"github.com/jfk9w-go/flu/logf"
 	"github.com/pkg/errors"
 	"golang.org/x/exp/utf8string"
+
+	"github.com/jfk9w-go/flu/logf"
 )
 
 // Command is a text bot command.
@@ -116,7 +118,7 @@ func (cmd *Command) Start(ctx context.Context, client Client) error {
 type Button [3]string
 
 func (b Button) StartCallbackURL(username string) string {
-	return fmt.Sprintf("https://t.me/%s?start=%s", username, base64.URLEncoding.EncodeToString([]byte(b[1]+" "+b[2])))
+	return fmt.Sprintf("https://t.me/%s?start=%s", username, url.QueryEscape(b[1]+" "+b[2]))
 }
 
 func (cmd *Command) Button(text string) Button {

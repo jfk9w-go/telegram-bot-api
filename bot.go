@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -195,11 +196,16 @@ func (b *Bot) CommandListener(value interface{}) *Bot {
 
 func (b *Bot) onStart(ctx context.Context, cmd *Command) error {
 	if cmd.Key == "/start" && cmd.Payload != "" {
-		if data, err := base64.URLEncoding.DecodeString(cmd.Payload); err != nil {
-			logf.Get(b).Warnf(ctx, "parse %s parameters: %v", cmd, err)
+		var payload string
+		if data, err := base64.URLEncoding.DecodeString(cmd.Payload); err == nil {
+			payload = string(data)
+		} else if data, err := url.QueryUnescape(cmd.Payload); err == nil {
+			payload = data
 		} else {
-			cmd.init(b.Username(), string(data))
+			return err
 		}
+
+		cmd.init(b.Username(), payload)
 	}
 
 	return nil
